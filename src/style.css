@@ -1,0 +1,50 @@
+html,
+body,
+#app {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  overflow: hidden;
+  background: #111;
+}
+
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  box-sizing: border-box;
+  background: rgba(8, 8, 8, 0.95);
+  color: #f2f2f2;
+  font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-bottom: 1px solid #2c2c2c;
+  z-index: 20;
+}
+
+#hud-left,
+#hud-right {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hud-right {
+  text-align: right;
+  color: #aee3ff;
+}
+
+#app {
+  width: 100vw;
+  height: calc(100vh - 54px);
+  margin-top: 54px;
+}
