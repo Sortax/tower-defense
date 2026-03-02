@@ -237,6 +237,7 @@ class GameScene extends Phaser.Scene {
     // Tower controls now live in HTML HUD so they stay outside the grid/canvas.
     this.bindTowerPanelControls()
     this.createRangeOverlay()
+    this.createCountdownOverlay()
     this.scale.on("resize", () => this.layoutGameUi())
     this.layoutGameUi()
     this.bindInput()
@@ -327,6 +328,26 @@ class GameScene extends Phaser.Scene {
   layoutGameUi() {
     this.layoutHud()
     this.layoutWaveButton()
+    this.layoutCountdownOverlay()
+  }
+
+  createCountdownOverlay() {
+    this.countdownOverlayText = this.add.text(0, 0, "", {
+      fontSize: "54px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 8,
+      align: "center"
+    })
+    this.countdownOverlayText.setOrigin(0.5)
+    this.countdownOverlayText.setDepth(25)
+    this.countdownOverlayText.setVisible(false)
+    this.layoutCountdownOverlay()
+  }
+
+  layoutCountdownOverlay() {
+    if (!this.countdownOverlayText) return
+    this.countdownOverlayText.setPosition(this.scale.width / 2, this.scale.height / 2)
   }
 
   // Phaser in-grid tower panel was removed; the HUD sidebar provides these controls.
@@ -601,6 +622,7 @@ Sell: ${refundValue}`
         if (this.gameOver || this.waveState !== "countdown") return
 
         this.countdownRemaining -= 1
+        console.log("COUNTDOWN", this.countdownRemaining)
         this.updateUI()
 
         if (this.countdownRemaining > 0) return
@@ -994,6 +1016,14 @@ Sell: ${refundValue}`
 
     if (this.selectedPlacedTower) {
       this.updateTowerInfoPanel(this.selectedPlacedTower)
+    }
+
+    if (this.countdownOverlayText) {
+      const showCountdownOverlay = this.waveState === "countdown"
+      this.countdownOverlayText.setVisible(showCountdownOverlay)
+      if (showCountdownOverlay) {
+        this.countdownOverlayText.setText(`Next wave in: ${this.countdownRemaining}`)
+      }
     }
   }
 
