@@ -10,6 +10,11 @@ const GAME_MODE_CLASSIC = "classic"
 const MAX_LEADERBOARD_ENTRIES = 10
 const HUD_HIDDEN_DISPLAY = "none"
 const HUD_VISIBLE_DISPLAY = "flex"
+const GAME_MODES = {
+  easy: { key: "easy", label: "Easy", maxWaves: 20 },
+  normal: { key: "normal", label: "Normal", maxWaves: 30 },
+  endless: { key: "endless", label: "Endless", maxWaves: null }
+}
 
 function setHudVisibility(visible) {
   const hud = document.getElementById("hud")
@@ -125,6 +130,7 @@ class MenuScene extends Phaser.Scene {
   create() {
     setHudVisibility(false)
     this.cameras.main.setBackgroundColor("#111")
+    this.selectedModeKey = "normal"
 
     this.add.text(450, 120, "Tower Defense", {
       fontSize: "58px",
@@ -136,7 +142,7 @@ class MenuScene extends Phaser.Scene {
       color: "#ffee88"
     }).setOrigin(0.5)
 
-    this.add.text(450, 320, "1 / 2 / 3: Select Tower\nClick empty tile: Place Tower\nClick tower: Upgrade", {
+    this.add.text(450, 320, "1 / 2 / 3 / 4: Select Tower\nClick empty tile: Place Tower\nClick tower: Upgrade", {
       fontSize: "24px",
       color: "#ffffff",
       align: "center",
@@ -164,6 +170,31 @@ class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     const playButton = this.add.text(450, 570, "Play", {
+    this.add.text(450, 490, "Select Mode", {
+      fontSize: "28px",
+      color: "#ffee88"
+    }).setOrigin(0.5)
+
+    const modeButtonY = 530
+    this.modeButtons = []
+    Object.values(GAME_MODES).forEach((mode, index) => {
+      const button = this.add.text(330 + index * 120, modeButtonY, mode.label, {
+        fontSize: "26px",
+        color: "#cfd8dc",
+        backgroundColor: "#25333d",
+        padding: { x: 12, y: 8 }
+      }).setOrigin(0.5)
+
+      button.setInteractive({ useHandCursor: true })
+      button.on("pointerdown", () => {
+        this.selectedModeKey = mode.key
+        this.updateModeButtonStyles()
+      })
+      this.modeButtons.push({ key: mode.key, button })
+    })
+    this.updateModeButtonStyles()
+
+    const playButton = this.add.text(450, 575, "Play", {
       fontSize: "38px",
       color: "#7fffa0",
       backgroundColor: "#1b3d24",
@@ -174,7 +205,17 @@ class MenuScene extends Phaser.Scene {
     playButton.on("pointerover", () => playButton.setStyle({ color: "#d8ffe6" }))
     playButton.on("pointerout", () => playButton.setStyle({ color: "#7fffa0" }))
     playButton.on("pointerdown", () => {
-      this.scene.start("game")
+      this.scene.start("game", { mode: GAME_MODES[this.selectedModeKey] })
+    })
+  }
+
+  updateModeButtonStyles() {
+    this.modeButtons.forEach(({ key, button }) => {
+      const isActive = key === this.selectedModeKey
+      button.setStyle({
+        color: isActive ? "#ffffff" : "#cfd8dc",
+        backgroundColor: isActive ? "#2f7f46" : "#25333d"
+      })
     })
   }
 }
@@ -186,15 +227,18 @@ class GameOverScene extends Phaser.Scene {
 
   create(data) {
     setHudVisibility(false)
+    const title = data.title ?? "Game Over"
+    const titleColor = data.titleColor ?? "#ff5555"
+    const mode = data.mode ?? GAME_MODES.normal
     const finalWaveReached = data.finalWaveReached ?? 1
     const score = data.score ?? 0
     const bestScore = data.bestScore ?? getBestScore()
 
     this.cameras.main.setBackgroundColor("#111")
 
-    this.add.text(450, 150, "Game Over", {
+    this.add.text(450, 150, title, {
       fontSize: "64px",
-      color: "#ff5555"
+      color: titleColor
     }).setOrigin(0.5)
 
     this.add.text(450, 280, `Final Wave: ${finalWaveReached}\nScore: ${score}\nBest: ${bestScore}`, {
@@ -215,7 +259,7 @@ class GameOverScene extends Phaser.Scene {
     restartButton.on("pointerover", () => restartButton.setStyle({ color: "#d8ffe6" }))
     restartButton.on("pointerout", () => restartButton.setStyle({ color: "#7fffa0" }))
     restartButton.on("pointerdown", () => {
-      this.scene.start("game")
+      this.scene.start("game", { mode })
     })
 
     const menuButton = this.add.text(450, 545, "Menu", {
@@ -237,9 +281,12 @@ class GameScene extends Phaser.Scene {
     super("game")
   }
 
-  create() {
+  create(data) {
     setHudVisibility(true)
     this.cameras.main.setBackgroundColor("#111")
+
+    this.mode = data.mode ?? GAME_MODES.normal
+    this.maxWaves = this.mode.maxWaves
 
     this.tileSize = 48
     this.gridW = 16
@@ -262,6 +309,7 @@ class GameScene extends Phaser.Scene {
     this.drawGrid()
 
     this.enemies = this.add.group()
+    this.projectiles = this.add.group()
     this.towers = []
 
     this.money = 100
@@ -271,6 +319,8 @@ class GameScene extends Phaser.Scene {
     this.wavesCompleted = 0
     this.moneyEarned = 0
     this.waveState = "intermission"
+    this.countdownRemaining = 0
+    this.countdownTimer = null
     this.pendingSpawns = 0
     this.waveSpawnRemaining = 0
     this.selectedTowerKey = TOWER_KEY_ORDER[0]
@@ -298,6 +348,7 @@ class GameScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-ONE", () => this.selectTowerBySlot(0))
     this.input.keyboard.on("keydown-TWO", () => this.selectTowerBySlot(1))
     this.input.keyboard.on("keydown-THREE", () => this.selectTowerBySlot(2))
+    this.input.keyboard.on("keydown-FOUR", () => this.selectTowerBySlot(3))
 
     this.input.on("pointerdown", (p, currentlyOver) => {
       if (this.gameOver) return
@@ -462,15 +513,16 @@ class GameScene extends Phaser.Scene {
     if (!tower || !this.towerPanelInfoEl) return
 
     const towerType = TOWER_TYPES[tower.typeKey]
-    const upgradeCost = tower.level < tower.maxLevel ? tower.baseCost * tower.level : null
+    const upgradeCost = tower.level < tower.maxLevel ? this.getTowerUpgradeCost(tower) : null
     const refundValue = Math.floor(tower.totalInvested * 0.7)
     const damageLabel = tower.damage.toFixed(1).replace(".0", "")
+    const rangeTiles = Math.round((tower.range / this.tileSize) * 10) / 10
     const nextCostLabel = upgradeCost ? `${upgradeCost}` : "MAX"
 
     this.towerPanelInfoEl.textContent = `Type: ${towerType.name}
 Level: ${tower.level}/${tower.maxLevel}
 Damage: ${damageLabel}
-Range: ${Math.round(tower.range)}
+Range: ${rangeTiles.toFixed(1)} tiles
 Upgrade: ${nextCostLabel}
 Sell: ${refundValue}`
     this.setSellButtonEnabled(true, `Sell $${refundValue}`)
@@ -503,13 +555,21 @@ Sell: ${refundValue}`
     tower.setFillStyle(tint, 1)
   }
 
+  getTowerUpgradeCost(tower) {
+    const baseCost = tower.baseCost * tower.level
+    if (tower.level <= 3) return baseCost
+
+    const lateGameMultiplier = 1 + (tower.level - 3) * 0.75
+    return Math.round(baseCost * lateGameMultiplier)
+  }
+
   tryUpgradeSelectedTower() {
     if (this.gameOver || !this.selectedPlacedTower) return
 
     const tower = this.selectedPlacedTower
     if (tower.level >= tower.maxLevel) return
 
-    const upgradeCost = tower.baseCost * tower.level
+    const upgradeCost = this.getTowerUpgradeCost(tower)
     if (this.money < upgradeCost) return
 
     this.money -= upgradeCost
@@ -518,7 +578,7 @@ Sell: ${refundValue}`
 
     const levelMultiplier = tower.level - 1
     tower.damage = tower.baseDamage * (1 + 0.2 * levelMultiplier)
-    tower.range = tower.baseRange * (1 + 0.1 * levelMultiplier)
+    tower.range = tower.baseRange + levelMultiplier * 1.25 * this.tileSize
     tower.cooldown = tower.baseCooldown * (1 - 0.1 * levelMultiplier)
 
     this.applyTowerLevelVisual(tower)
@@ -601,17 +661,57 @@ Sell: ${refundValue}`
       }
     })
 
+    this.projectiles.getChildren().forEach((projectile) => {
+      if (projectile.active) {
+        this.updateProjectile(projectile, dt)
+      }
+    })
+
     if (!this.gameOver && this.waveState === "wave" && this.pendingSpawns === 0 && this.activeEnemyCount() === 0) {
       this.finishCurrentWave()
     }
   }
 
   finishCurrentWave() {
-    this.waveState = "intermission"
     this.waveIndex += 1
     this.wavesCompleted += 1
-    this.setStartButtonState(true, `Start Wave ${this.waveIndex + 1}`)
+
+    if (this.maxWaves && this.waveIndex >= this.maxWaves) {
+      this.endGame(true)
+      return
+    }
+
+    this.startWaveCountdown()
+  }
+
+  startWaveCountdown() {
+    this.waveState = "countdown"
+    this.countdownRemaining = 5
+    if (this.countdownTimer) {
+      this.countdownTimer.remove(false)
+    }
+
+    this.setStartButtonState(false, "Wave Starting Soon")
     this.updateUI()
+
+    this.countdownTimer = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        if (this.gameOver || this.waveState !== "countdown") return
+
+        this.countdownRemaining -= 1
+        this.updateUI()
+
+        if (this.countdownRemaining > 0) return
+
+        this.countdownTimer?.remove(false)
+        this.countdownTimer = null
+        this.countdownRemaining = 0
+        this.waveState = "intermission"
+        this.startNextWave()
+      }
+    })
   }
 
   getWaveForNumber(waveNumber) {
@@ -771,6 +871,19 @@ Sell: ${refundValue}`
     })
   }
 
+  playExplosionEffect(x, y, color = 0xffb366) {
+    const explosion = this.add.circle(x, y, 8, color, 0.7)
+    explosion.setDepth(12)
+    this.tweens.add({
+      targets: explosion,
+      radius: 36,
+      alpha: 0,
+      duration: 220,
+      ease: "Quad.easeOut",
+      onComplete: () => explosion.destroy()
+    })
+  }
+
   moveEnemy(enemy, dt, time) {
     if (this.gameOver || enemy.isDying) return
 
@@ -824,10 +937,11 @@ Sell: ${refundValue}`
     tower.baseCost = towerType.cost
     tower.totalInvested = towerType.cost
     tower.level = 1
-    tower.maxLevel = 3
+    tower.maxLevel = 5
     tower.mode = towerType.mode
     tower.slowFactor = towerType.slowFactor ?? 1
     tower.slowDuration = towerType.slowDuration ?? 0
+    tower.projectileSpeed = towerType.projectileSpeed ?? 0
     tower.splashRadius = towerType.splashRadius ?? 0
     tower.lastShot = 0
 
@@ -853,6 +967,11 @@ Sell: ${refundValue}`
     if (!target) return
 
     tower.lastShot = time
+
+    if (tower.mode === "projectile_aoe") {
+      this.spawnMissileProjectile(tower, target)
+      return
+    }
 
     const beam = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xffffaa)
     beam.setOrigin(0, 0)
@@ -884,6 +1003,52 @@ Sell: ${refundValue}`
     }
   }
 
+  spawnMissileProjectile(tower, target) {
+    const projectile = this.add.circle(tower.x, tower.y, 4, 0xffc266)
+    projectile.setDepth(12)
+
+    projectile.target = target
+    projectile.targetX = target.x
+    projectile.targetY = target.y
+    projectile.speed = tower.projectileSpeed
+    projectile.damage = tower.damage
+    projectile.splashRadius = tower.splashRadius
+
+    this.projectiles.add(projectile)
+  }
+
+  updateProjectile(projectile, dt) {
+    if (projectile.target?.active && !projectile.target.isDying) {
+      projectile.targetX = projectile.target.x
+      projectile.targetY = projectile.target.y
+    }
+
+    const dx = projectile.targetX - projectile.x
+    const dy = projectile.targetY - projectile.y
+    const dist = Math.hypot(dx, dy)
+
+    if (dist < 8) {
+      const enemiesInSplash = this.enemies.getChildren().filter((enemy) => {
+        if (!enemy.active || enemy.isDying) return false
+        const splashDistance = Phaser.Math.Distance.Between(projectile.x, projectile.y, enemy.x, enemy.y)
+        return splashDistance <= projectile.splashRadius
+      })
+
+      enemiesInSplash.forEach((enemy) => {
+        this.applyDamage(enemy, projectile.damage)
+      })
+
+      this.playExplosionEffect(projectile.x, projectile.y)
+      projectile.destroy()
+      return
+    }
+
+    const step = projectile.speed * dt
+    const ratio = Math.min(1, step / dist)
+    projectile.x += dx * ratio
+    projectile.y += dy * ratio
+  }
+
   applyDamage(enemy, damage) {
     if (!enemy.active || enemy.isDying) return
 
@@ -910,17 +1075,21 @@ Sell: ${refundValue}`
   updateUI() {
     const selectedTower = TOWER_TYPES[this.selectedTowerKey]
     const waveLabel = this.waveIndex + 1
-    const waveStateLabel = this.waveState === "wave" ? "In Progress" : "Intermission"
+    const waveStateLabel = this.waveState === "wave"
+      ? "In Progress"
+      : this.waveState === "countdown"
+        ? `Next wave in: ${this.countdownRemaining}s`
+        : "Intermission"
     const bossLabel = waveLabel % 5 === 0 ? " BOSS WAVE" : ""
     const enemiesRemaining = this.waveState === "wave"
       ? this.waveSpawnRemaining + this.activeEnemyCount()
       : 0
 
     if (this.hudLeftEl) {
-      this.hudLeftEl.textContent = `Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
+      this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
     }
     if (this.hudRightEl) {
-      this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3]`
+      this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3/4]`
     }
 
     if (this.selectedPlacedTower) {
@@ -928,9 +1097,13 @@ Sell: ${refundValue}`
     }
   }
 
-  endGame() {
+  endGame(victory = false) {
     if (this.gameOver) return
     this.gameOver = true
+    if (this.countdownTimer) {
+      this.countdownTimer.remove(false)
+      this.countdownTimer = null
+    }
     this.setStartButtonState(false, "Start Wave")
     this.setUpgradeButtonEnabled(false, "Upgrade")
     this.setSellButtonEnabled(false, "Sell")
@@ -946,6 +1119,9 @@ Sell: ${refundValue}`
     const bestScore = leaderboard[0]?.score ?? getBestScore()
 
     this.scene.start("gameover", {
+      title: victory ? "You Win" : "Game Over",
+      titleColor: victory ? "#7fffa0" : "#ff5555",
+      mode: this.mode,
       finalWaveReached,
       score,
       bestScore,

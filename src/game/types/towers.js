@@ -31,7 +31,19 @@ export const TOWER_TYPES = {
     cost: 45,
     mode: "aoe",
     splashRadius: 60
+  },
+  missile: {
+    key: "missile",
+    name: "Missile",
+    color: 0xff8800,
+    range: 180,
+    cooldown: 1100,
+    damage: 22,
+    cost: 55,
+    mode: "projectile_aoe",
+    projectileSpeed: 280,
+    splashRadius: 90
   }
 }
 
-export const TOWER_KEY_ORDER = ["gun", "slow", "aoe"]
+export const TOWER_KEY_ORDER = ["gun", "slow", "aoe", "missile"]
