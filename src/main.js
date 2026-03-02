@@ -228,6 +228,8 @@ class GameScene extends Phaser.Scene {
     this.uiPadding = 16
     this.hudLeftEl = document.getElementById("hud-left")
     this.hudRightEl = document.getElementById("hud-right")
+    this.hudRightLabelEl = document.getElementById("hud-right-label")
+    this.hudMenuBtnEl = document.getElementById("hud-menu-btn")
     this.towerPanelEl = document.getElementById("tower-panel")
     this.towerPanelInfoEl = document.getElementById("tower-panel-info")
     this.towerUpgradeBtnEl = document.getElementById("tower-upgrade-btn")
@@ -236,6 +238,7 @@ class GameScene extends Phaser.Scene {
     this.createWaveControls()
     // Tower controls now live in HTML HUD so they stay outside the grid/canvas.
     this.bindTowerPanelControls()
+    this.bindHudMenuButton()
     this.createRangeOverlay()
     this.createCountdownOverlay()
     this.scale.on("resize", () => this.layoutGameUi())
@@ -347,7 +350,44 @@ class GameScene extends Phaser.Scene {
 
   layoutCountdownOverlay() {
     if (!this.countdownOverlayText) return
-    this.countdownOverlayText.setPosition(this.scale.width / 2, this.scale.height / 2)
+
+    // Keep the countdown near the enemy path row so it never hides tower placement lanes.
+    const pathCenterY = this.originY + 4 * this.tileSize + this.tileSize / 2
+    this.countdownOverlayText.setPosition(this.scale.width / 2, pathCenterY - 40)
+  }
+
+
+  bindHudMenuButton() {
+    if (!this.hudMenuBtnEl) return
+
+    this.onHudMenuButtonClick = (event) => {
+      // Keep this HUD button fully isolated from Phaser world input/click placement.
+      event.stopPropagation()
+      event.preventDefault()
+      this.abandonGameToMenu()
+    }
+
+    this.hudMenuBtnEl.addEventListener("click", this.onHudMenuButtonClick)
+    this.events.once("shutdown", () => {
+      this.hudMenuBtnEl?.removeEventListener("click", this.onHudMenuButtonClick)
+    })
+  }
+
+  abandonGameToMenu() {
+    if (this.gameOver) return
+
+    const confirmed = window.confirm("Abandonner la partie et revenir au menu ?")
+    if (!confirmed) return
+
+    // Stop countdown and all pending scene timers before leaving gameplay.
+    if (this.countdownTimer) {
+      this.countdownTimer.remove(false)
+      this.countdownTimer = null
+    }
+    this.time.removeAllEvents()
+
+    this.gameOver = true
+    this.scene.start("menu")
   }
 
   // Phaser in-grid tower panel was removed; the HUD sidebar provides these controls.
@@ -1010,8 +1050,11 @@ Sell: ${refundValue}`
     if (this.hudLeftEl) {
       this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
     }
-    if (this.hudRightEl) {
-      this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3/4]`
+    const selectedTowerLabel = `Tower: ${selectedTower.name} [1/2/3/4]`
+    if (this.hudRightLabelEl) {
+      this.hudRightLabelEl.textContent = selectedTowerLabel
+    } else if (this.hudRightEl) {
+      this.hudRightEl.textContent = selectedTowerLabel
     }
 
     if (this.selectedPlacedTower) {
