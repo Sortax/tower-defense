@@ -51,7 +51,7 @@ class MenuScene extends Phaser.Scene {
       color: "#ffee88"
     }).setOrigin(0.5)
 
-    this.add.text(450, 320, "1 / 2 / 3: Select Tower\nClick empty tile: Place Tower\nClick tower: Upgrade", {
+    this.add.text(450, 320, "1 / 2 / 3 / 4: Select Tower\nClick empty tile: Place Tower\nClick tower: Upgrade", {
       fontSize: "24px",
       color: "#ffffff",
       align: "center",
@@ -163,6 +163,7 @@ class GameScene extends Phaser.Scene {
     this.drawGrid()
 
     this.enemies = this.add.group()
+    this.projectiles = this.add.group()
     this.towers = []
 
     this.money = 100
@@ -199,6 +200,7 @@ class GameScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-ONE", () => this.selectTowerBySlot(0))
     this.input.keyboard.on("keydown-TWO", () => this.selectTowerBySlot(1))
     this.input.keyboard.on("keydown-THREE", () => this.selectTowerBySlot(2))
+    this.input.keyboard.on("keydown-FOUR", () => this.selectTowerBySlot(3))
 
     this.input.on("pointerdown", (p, currentlyOver) => {
       if (this.gameOver) return
@@ -502,6 +504,12 @@ Sell: ${refundValue}`
       }
     })
 
+    this.projectiles.getChildren().forEach((projectile) => {
+      if (projectile.active) {
+        this.updateProjectile(projectile, dt)
+      }
+    })
+
     if (!this.gameOver && this.waveState === "wave" && this.pendingSpawns === 0 && this.activeEnemyCount() === 0) {
       this.finishCurrentWave()
     }
@@ -672,6 +680,19 @@ Sell: ${refundValue}`
     })
   }
 
+  playExplosionEffect(x, y, color = 0xffb366) {
+    const explosion = this.add.circle(x, y, 8, color, 0.7)
+    explosion.setDepth(12)
+    this.tweens.add({
+      targets: explosion,
+      radius: 36,
+      alpha: 0,
+      duration: 220,
+      ease: "Quad.easeOut",
+      onComplete: () => explosion.destroy()
+    })
+  }
+
   moveEnemy(enemy, dt, time) {
     if (this.gameOver || enemy.isDying) return
 
@@ -729,6 +750,7 @@ Sell: ${refundValue}`
     tower.mode = towerType.mode
     tower.slowFactor = towerType.slowFactor ?? 1
     tower.slowDuration = towerType.slowDuration ?? 0
+    tower.projectileSpeed = towerType.projectileSpeed ?? 0
     tower.splashRadius = towerType.splashRadius ?? 0
     tower.lastShot = 0
 
@@ -754,6 +776,11 @@ Sell: ${refundValue}`
     if (!target) return
 
     tower.lastShot = time
+
+    if (tower.mode === "projectile_aoe") {
+      this.spawnMissileProjectile(tower, target)
+      return
+    }
 
     const beam = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xffffaa)
     beam.setOrigin(0, 0)
@@ -783,6 +810,52 @@ Sell: ${refundValue}`
       target.isSlowed = true
       this.updateEnemyColor(target)
     }
+  }
+
+  spawnMissileProjectile(tower, target) {
+    const projectile = this.add.circle(tower.x, tower.y, 4, 0xffc266)
+    projectile.setDepth(12)
+
+    projectile.target = target
+    projectile.targetX = target.x
+    projectile.targetY = target.y
+    projectile.speed = tower.projectileSpeed
+    projectile.damage = tower.damage
+    projectile.splashRadius = tower.splashRadius
+
+    this.projectiles.add(projectile)
+  }
+
+  updateProjectile(projectile, dt) {
+    if (projectile.target?.active && !projectile.target.isDying) {
+      projectile.targetX = projectile.target.x
+      projectile.targetY = projectile.target.y
+    }
+
+    const dx = projectile.targetX - projectile.x
+    const dy = projectile.targetY - projectile.y
+    const dist = Math.hypot(dx, dy)
+
+    if (dist < 8) {
+      const enemiesInSplash = this.enemies.getChildren().filter((enemy) => {
+        if (!enemy.active || enemy.isDying) return false
+        const splashDistance = Phaser.Math.Distance.Between(projectile.x, projectile.y, enemy.x, enemy.y)
+        return splashDistance <= projectile.splashRadius
+      })
+
+      enemiesInSplash.forEach((enemy) => {
+        this.applyDamage(enemy, projectile.damage)
+      })
+
+      this.playExplosionEffect(projectile.x, projectile.y)
+      projectile.destroy()
+      return
+    }
+
+    const step = projectile.speed * dt
+    const ratio = Math.min(1, step / dist)
+    projectile.x += dx * ratio
+    projectile.y += dy * ratio
   }
 
   applyDamage(enemy, damage) {
@@ -821,7 +894,7 @@ Sell: ${refundValue}`
       this.hudLeftEl.textContent = `Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
     }
     if (this.hudRightEl) {
-      this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3]`
+      this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3/4]`
     }
 
     if (this.selectedPlacedTower) {
