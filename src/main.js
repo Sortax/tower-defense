@@ -363,15 +363,16 @@ class GameScene extends Phaser.Scene {
     if (!tower || !this.towerPanelInfoEl) return
 
     const towerType = TOWER_TYPES[tower.typeKey]
-    const upgradeCost = tower.level < tower.maxLevel ? tower.baseCost * tower.level : null
+    const upgradeCost = tower.level < tower.maxLevel ? this.getTowerUpgradeCost(tower) : null
     const refundValue = Math.floor(tower.totalInvested * 0.7)
     const damageLabel = tower.damage.toFixed(1).replace(".0", "")
+    const rangeTiles = Math.round((tower.range / this.tileSize) * 10) / 10
     const nextCostLabel = upgradeCost ? `${upgradeCost}` : "MAX"
 
     this.towerPanelInfoEl.textContent = `Type: ${towerType.name}
 Level: ${tower.level}/${tower.maxLevel}
 Damage: ${damageLabel}
-Range: ${Math.round(tower.range)}
+Range: ${rangeTiles.toFixed(1)} tiles
 Upgrade: ${nextCostLabel}
 Sell: ${refundValue}`
     this.setSellButtonEnabled(true, `Sell $${refundValue}`)
@@ -404,13 +405,21 @@ Sell: ${refundValue}`
     tower.setFillStyle(tint, 1)
   }
 
+  getTowerUpgradeCost(tower) {
+    const baseCost = tower.baseCost * tower.level
+    if (tower.level <= 3) return baseCost
+
+    const lateGameMultiplier = 1 + (tower.level - 3) * 0.75
+    return Math.round(baseCost * lateGameMultiplier)
+  }
+
   tryUpgradeSelectedTower() {
     if (this.gameOver || !this.selectedPlacedTower) return
 
     const tower = this.selectedPlacedTower
     if (tower.level >= tower.maxLevel) return
 
-    const upgradeCost = tower.baseCost * tower.level
+    const upgradeCost = this.getTowerUpgradeCost(tower)
     if (this.money < upgradeCost) return
 
     this.money -= upgradeCost
@@ -419,7 +428,7 @@ Sell: ${refundValue}`
 
     const levelMultiplier = tower.level - 1
     tower.damage = tower.baseDamage * (1 + 0.2 * levelMultiplier)
-    tower.range = tower.baseRange * (1 + 0.1 * levelMultiplier)
+    tower.range = tower.baseRange + levelMultiplier * 1.25 * this.tileSize
     tower.cooldown = tower.baseCooldown * (1 - 0.1 * levelMultiplier)
 
     this.applyTowerLevelVisual(tower)
@@ -725,7 +734,7 @@ Sell: ${refundValue}`
     tower.baseCost = towerType.cost
     tower.totalInvested = towerType.cost
     tower.level = 1
-    tower.maxLevel = 3
+    tower.maxLevel = 5
     tower.mode = towerType.mode
     tower.slowFactor = towerType.slowFactor ?? 1
     tower.slowDuration = towerType.slowDuration ?? 0
