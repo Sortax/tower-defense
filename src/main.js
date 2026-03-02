@@ -179,9 +179,15 @@ class GameScene extends Phaser.Scene {
     this.uiPadding = 16
     this.hudLeftEl = document.getElementById("hud-left")
     this.hudRightEl = document.getElementById("hud-right")
+    this.towerPanelEl = document.getElementById("tower-panel")
+    this.towerPanelInfoEl = document.getElementById("tower-panel-info")
+    this.towerUpgradeBtnEl = document.getElementById("tower-upgrade-btn")
+    this.towerSellBtnEl = document.getElementById("tower-sell-btn")
 
     this.createWaveControls()
-    this.createTowerInfoPanel()
+    // Tower controls now live in HTML HUD so they stay outside the grid/canvas.
+    this.bindTowerPanelControls()
+    this.createRangeOverlay()
     this.scale.on("resize", () => this.layoutGameUi())
     this.layoutGameUi()
     this.bindInput()
@@ -197,35 +203,32 @@ class GameScene extends Phaser.Scene {
     this.input.on("pointerdown", (p, currentlyOver) => {
       if (this.gameOver) return
       if (currentlyOver && currentlyOver.length) return
-      if (this.isPointerOnUpgradeButton(p.worldX, p.worldY)) return
-      if (this.isPointerOnSellButton(p.worldX, p.worldY)) return
 
       const tile = this.worldToTile(p.worldX, p.worldY)
       if (!tile) {
-        this.hideTowerInfoPanel()
+        this.clearSelectedTower()
         return
       }
       if (this.pathSet.has(`${tile.x},${tile.y}`)) {
-        this.hideTowerInfoPanel()
+        this.clearSelectedTower()
         return
       }
 
       const existingTower = this.towers.find((t) => t.tx === tile.x && t.ty === tile.y)
       if (existingTower) {
-        this.selectedPlacedTower = existingTower
-        this.showTowerInfoPanel(existingTower)
+        this.selectPlacedTower(existingTower)
         return
       }
 
       const towerType = TOWER_TYPES[this.selectedTowerKey]
       if (this.money < towerType.cost) {
-        this.hideTowerInfoPanel()
+        this.clearSelectedTower()
         return
       }
 
       this.money -= towerType.cost
       this.placeTower(tile.x, tile.y, towerType)
-      this.hideTowerInfoPanel()
+      this.clearSelectedTower()
       this.updateUI()
     })
   }
@@ -276,123 +279,88 @@ class GameScene extends Phaser.Scene {
     this.layoutWaveButton()
   }
 
-  createTowerInfoPanel() {
-    this.towerInfoBg = this.add.rectangle(0, 0, 230, 142, 0x0f0f0f, 0.95)
-    this.towerInfoBg.setStrokeStyle(2, 0xffffff, 0.7)
-    this.towerInfoBg.setDepth(15)
-    this.towerInfoBg.setVisible(false)
+  // Phaser in-grid tower panel was removed; the HUD sidebar provides these controls.
+  bindTowerPanelControls() {
+    if (this.towerUpgradeBtnEl) {
+      this.towerUpgradeBtnEl.addEventListener("click", (event) => {
+        // Stop this click from reaching Phaser/world placement handlers.
+        event.stopPropagation()
+        this.tryUpgradeSelectedTower()
+      })
+    }
 
-    this.towerInfoText = this.add.text(0, 0, "", {
-      fontSize: "18px",
-      color: "#ffffff"
-    })
-    this.towerInfoText.setDepth(16)
-    this.towerInfoText.setVisible(false)
-
-    this.upgradeButtonBg = this.add.rectangle(0, 0, 92, 30, 0x2e7d32)
-    this.upgradeButtonBg.setStrokeStyle(1, 0xffffff, 0.6)
-    this.upgradeButtonBg.setDepth(16)
-    this.upgradeButtonBg.setVisible(false)
-    this.upgradeButtonBg.setInteractive({ useHandCursor: true })
-    this.upgradeButtonBg.on("pointerdown", (pointer, localX, localY, event) => {
-      event.stopPropagation()
-      this.tryUpgradeSelectedTower()
-    })
-
-    this.upgradeButtonText = this.add.text(0, 0, "Upgrade", {
-      fontSize: "16px",
-      color: "#ffffff"
-    })
-    this.upgradeButtonText.setOrigin(0.5)
-    this.upgradeButtonText.setDepth(17)
-    this.upgradeButtonText.setVisible(false)
-
-    this.sellButtonBg = this.add.rectangle(0, 0, 92, 30, 0x8a2f2f)
-    this.sellButtonBg.setStrokeStyle(1, 0xffffff, 0.6)
-    this.sellButtonBg.setDepth(16)
-    this.sellButtonBg.setVisible(false)
-    this.sellButtonBg.setInteractive({ useHandCursor: true })
-    this.sellButtonBg.on("pointerdown", (pointer, localX, localY, event) => {
-      event.stopPropagation()
-      this.trySellSelectedTower()
-    })
-
-    this.sellButtonText = this.add.text(0, 0, "Sell", {
-      fontSize: "16px",
-      color: "#ffffff"
-    })
-    this.sellButtonText.setOrigin(0.5)
-    this.sellButtonText.setDepth(17)
-    this.sellButtonText.setVisible(false)
+    if (this.towerSellBtnEl) {
+      this.towerSellBtnEl.addEventListener("click", (event) => {
+        // Stop this click from reaching Phaser/world placement handlers.
+        event.stopPropagation()
+        this.trySellSelectedTower()
+      })
+    }
   }
 
-  isPointerOnUpgradeButton(x, y) {
-    if (!this.upgradeButtonBg.visible || !this.upgradeButtonBg.input.enabled) return false
-    return this.upgradeButtonBg.getBounds().contains(x, y)
+  createRangeOverlay() {
+    // Dedicated Graphics object for selected-tower range so it can be redrawn independently.
+    this.rangeGraphics = this.add.graphics()
+    this.rangeGraphics.setDepth(11)
   }
 
-  isPointerOnSellButton(x, y) {
-    if (!this.sellButtonBg.visible || !this.sellButtonBg.input.enabled) return false
-    return this.sellButtonBg.getBounds().contains(x, y)
+  selectPlacedTower(tower) {
+    this.selectedPlacedTower = tower
+    this.showTowerInfoPanel(tower)
+  }
+
+  clearSelectedTower() {
+    this.selectedPlacedTower = null
+    this.hideTowerInfoPanel()
   }
 
   showTowerInfoPanel(tower) {
+    if (!this.towerPanelEl) return
+    this.towerPanelEl.classList.remove("tower-panel--hidden")
     this.updateTowerInfoPanel(tower)
-    this.towerInfoBg.setVisible(true)
-    this.towerInfoText.setVisible(true)
-    this.upgradeButtonBg.setVisible(true)
-    this.upgradeButtonText.setVisible(true)
-    this.sellButtonBg.setVisible(true)
-    this.sellButtonText.setVisible(true)
+    this.drawSelectedTowerRange(tower)
   }
 
   hideTowerInfoPanel() {
-    this.selectedPlacedTower = null
-    this.towerInfoBg.setVisible(false)
-    this.towerInfoText.setVisible(false)
-    this.upgradeButtonBg.setVisible(false)
-    this.upgradeButtonText.setVisible(false)
-    this.sellButtonBg.setVisible(false)
-    this.sellButtonText.setVisible(false)
+    if (this.towerPanelEl) {
+      this.towerPanelEl.classList.add("tower-panel--hidden")
+    }
+    this.drawSelectedTowerRange(null)
   }
 
-  positionTowerInfoPanel(tower) {
-    const panelHalfW = 115
-    const panelHalfH = 71
-    const minX = this.originX + panelHalfW
-    const maxX = this.originX + this.gridW * this.tileSize - panelHalfW
-    const minY = this.originY + panelHalfH
-    const maxY = this.originY + this.gridH * this.tileSize - panelHalfH
+  drawSelectedTowerRange(tower) {
+    if (!this.rangeGraphics) return
+    this.rangeGraphics.clear()
+    if (!tower) return
 
-    const panelX = Phaser.Math.Clamp(tower.x + 130, minX, maxX)
-    const panelY = Phaser.Math.Clamp(tower.y - 10, minY, maxY)
-
-    this.towerInfoBg.setPosition(panelX, panelY)
-    this.towerInfoText.setPosition(panelX - 105, panelY - 60)
-    this.upgradeButtonBg.setPosition(panelX - 50, panelY + 48)
-    this.upgradeButtonText.setPosition(panelX - 50, panelY + 48)
-    this.sellButtonBg.setPosition(panelX + 50, panelY + 48)
-    this.sellButtonText.setPosition(panelX + 50, panelY + 48)
+    this.rangeGraphics.lineStyle(2, 0x79c8ff, 0.9)
+    this.rangeGraphics.fillStyle(0x79c8ff, 0.12)
+    this.rangeGraphics.strokeCircle(tower.x, tower.y, tower.range)
+    this.rangeGraphics.fillCircle(tower.x, tower.y, tower.range)
   }
 
   setUpgradeButtonEnabled(enabled, label = "Upgrade") {
-    this.upgradeButtonText.setText(label)
-    this.upgradeButtonBg.input.enabled = enabled
-    this.upgradeButtonBg.fillColor = enabled ? 0x2e7d32 : 0x555555
-    this.upgradeButtonBg.setAlpha(enabled ? 1 : 0.75)
-    this.upgradeButtonText.setColor(enabled ? "#ffffff" : "#cccccc")
+    if (!this.towerUpgradeBtnEl) return
+    this.towerUpgradeBtnEl.textContent = label
+    this.towerUpgradeBtnEl.disabled = !enabled
+    this.towerUpgradeBtnEl.style.background = enabled ? "#2e7d32" : "#555555"
+    this.towerUpgradeBtnEl.style.color = enabled ? "#ffffff" : "#cccccc"
+    this.towerUpgradeBtnEl.style.cursor = enabled ? "pointer" : "not-allowed"
+    this.towerUpgradeBtnEl.style.opacity = enabled ? "1" : "0.75"
   }
 
   setSellButtonEnabled(enabled, label = "Sell") {
-    this.sellButtonText.setText(label)
-    this.sellButtonBg.input.enabled = enabled
-    this.sellButtonBg.fillColor = enabled ? 0x8a2f2f : 0x555555
-    this.sellButtonBg.setAlpha(enabled ? 1 : 0.75)
-    this.sellButtonText.setColor(enabled ? "#ffffff" : "#cccccc")
+    if (!this.towerSellBtnEl) return
+    this.towerSellBtnEl.textContent = label
+    this.towerSellBtnEl.disabled = !enabled
+    this.towerSellBtnEl.style.background = enabled ? "#8a2f2f" : "#555555"
+    this.towerSellBtnEl.style.color = enabled ? "#ffffff" : "#cccccc"
+    this.towerSellBtnEl.style.cursor = enabled ? "pointer" : "not-allowed"
+    this.towerSellBtnEl.style.opacity = enabled ? "1" : "0.75"
   }
 
   updateTowerInfoPanel(tower) {
-    if (!tower) return
+    if (!tower || !this.towerPanelInfoEl) return
 
     const towerType = TOWER_TYPES[tower.typeKey]
     const upgradeCost = tower.level < tower.maxLevel ? tower.baseCost * tower.level : null
@@ -400,10 +368,12 @@ class GameScene extends Phaser.Scene {
     const damageLabel = tower.damage.toFixed(1).replace(".0", "")
     const nextCostLabel = upgradeCost ? `${upgradeCost}` : "MAX"
 
-    this.positionTowerInfoPanel(tower)
-    this.towerInfoText.setText(
-      `Type: ${towerType.name}\nLevel: ${tower.level}/${tower.maxLevel}\nDamage: ${damageLabel}\nUpgrade: ${nextCostLabel}\nSell: ${refundValue}`
-    )
+    this.towerPanelInfoEl.textContent = `Type: ${towerType.name}
+Level: ${tower.level}/${tower.maxLevel}
+Damage: ${damageLabel}
+Range: ${Math.round(tower.range)}
+Upgrade: ${nextCostLabel}
+Sell: ${refundValue}`
     this.setSellButtonEnabled(true, `Sell $${refundValue}`)
 
     if (tower.level >= tower.maxLevel) {
@@ -454,6 +424,7 @@ class GameScene extends Phaser.Scene {
 
     this.applyTowerLevelVisual(tower)
     this.updateTowerInfoPanel(tower)
+    this.drawSelectedTowerRange(tower)
     this.updateUI()
   }
 
@@ -467,7 +438,7 @@ class GameScene extends Phaser.Scene {
     tower.destroy()
 
     this.money += refund
-    this.hideTowerInfoPanel()
+    this.clearSelectedTower()
     this.updateUI()
   }
 
