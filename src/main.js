@@ -5,6 +5,9 @@ import { ENEMY_TYPES } from "./game/types/enemies"
 import { WAVES } from "./game/systems/waves"
 
 const BEST_SCORE_KEY = "tower_defense_best_score"
+const LEADERBOARD_KEY = "tower_defense_leaderboard_top10"
+const GAME_MODE_CLASSIC = "classic"
+const MAX_LEADERBOARD_ENTRIES = 10
 const HUD_HIDDEN_DISPLAY = "none"
 const HUD_VISIBLE_DISPLAY = "flex"
 
@@ -30,6 +33,88 @@ function setBestScore(score) {
   } catch {
     // Ignore storage failures; gameplay still works.
   }
+}
+
+function normalizeLeaderboardEntry(entry) {
+  if (!entry || typeof entry !== "object") return null
+
+  const score = Number.parseInt(entry.score, 10)
+  const wavesReached = Number.parseInt(entry.wavesReached, 10)
+  const mode = typeof entry.mode === "string" && entry.mode.trim() ? entry.mode : GAME_MODE_CLASSIC
+  const dateISO = typeof entry.dateISO === "string" && entry.dateISO.trim()
+    ? entry.dateISO
+    : new Date().toISOString()
+
+  if (!Number.isFinite(score)) return null
+  if (!Number.isFinite(wavesReached)) return null
+
+  return {
+    score,
+    mode,
+    wavesReached,
+    dateISO
+  }
+}
+
+function saveLeaderboard(leaderboard) {
+  try {
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard))
+  } catch {
+    // Ignore storage failures; gameplay still works.
+  }
+}
+
+function getLeaderboard() {
+  let leaderboard = []
+
+  try {
+    const raw = localStorage.getItem(LEADERBOARD_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        leaderboard = parsed
+          .map((entry) => normalizeLeaderboardEntry(entry))
+          .filter((entry) => entry !== null)
+      }
+    }
+  } catch {
+    leaderboard = []
+  }
+
+  const legacyBestScore = getBestScore()
+  if (!leaderboard.length && legacyBestScore > 0) {
+    leaderboard.push({
+      score: legacyBestScore,
+      mode: "legacy",
+      wavesReached: 0,
+      dateISO: new Date().toISOString()
+    })
+  }
+
+  leaderboard.sort((a, b) => b.score - a.score)
+  const trimmed = leaderboard.slice(0, MAX_LEADERBOARD_ENTRIES)
+
+  if (trimmed.length !== leaderboard.length || !leaderboard.length && legacyBestScore > 0) {
+    saveLeaderboard(trimmed)
+  }
+
+  return trimmed
+}
+
+function addLeaderboardEntry(entry) {
+  const normalizedEntry = normalizeLeaderboardEntry(entry)
+  if (!normalizedEntry) {
+    return getLeaderboard()
+  }
+
+  const leaderboard = [...getLeaderboard(), normalizedEntry]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_LEADERBOARD_ENTRIES)
+
+  saveLeaderboard(leaderboard)
+  setBestScore(leaderboard[0]?.score ?? 0)
+
+  return leaderboard
 }
 
 class MenuScene extends Phaser.Scene {
@@ -64,7 +149,21 @@ class MenuScene extends Phaser.Scene {
       color: "#aee3ff"
     }).setOrigin(0.5)
 
-    const playButton = this.add.text(450, 520, "Play", {
+    const leaderboard = getLeaderboard()
+    const leaderboardLines = leaderboard.length
+      ? leaderboard
+        .map((entry, index) => `${index + 1}. ${entry.score} | ${entry.mode} | Wave ${entry.wavesReached}`)
+        .join("\n")
+      : "No runs yet"
+
+    this.add.text(450, 500, `Top 10 Leaderboard\n${leaderboardLines}`, {
+      fontSize: "18px",
+      color: "#ffffff",
+      align: "center",
+      lineSpacing: 6
+    }).setOrigin(0.5)
+
+    const playButton = this.add.text(450, 570, "Play", {
       fontSize: "38px",
       color: "#7fffa0",
       backgroundColor: "#1b3d24",
@@ -838,8 +937,13 @@ Sell: ${refundValue}`
 
     const finalWaveReached = this.waveState === "wave" ? this.waveIndex + 1 : Math.max(1, this.waveIndex)
     const score = this.wavesCompleted * 100 + this.moneyEarned
-    const bestScore = Math.max(score, getBestScore())
-    setBestScore(bestScore)
+    const leaderboard = addLeaderboardEntry({
+      score,
+      mode: GAME_MODE_CLASSIC,
+      wavesReached: finalWaveReached,
+      dateISO: new Date().toISOString()
+    })
+    const bestScore = leaderboard[0]?.score ?? getBestScore()
 
     this.scene.start("gameover", {
       finalWaveReached,
