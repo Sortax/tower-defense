@@ -219,6 +219,8 @@ class GameScene extends Phaser.Scene {
     this.wavesCompleted = 0
     this.moneyEarned = 0
     this.waveState = "intermission"
+    this.countdownRemaining = 0
+    this.countdownTimer = null
     this.pendingSpawns = 0
     this.waveSpawnRemaining = 0
     this.selectedTowerKey = TOWER_KEY_ORDER[0]
@@ -571,7 +573,6 @@ Sell: ${refundValue}`
   }
 
   finishCurrentWave() {
-    this.waveState = "intermission"
     this.waveIndex += 1
     this.wavesCompleted += 1
 
@@ -580,8 +581,37 @@ Sell: ${refundValue}`
       return
     }
 
-    this.setStartButtonState(true, `Start Wave ${this.waveIndex + 1}`)
+    this.startWaveCountdown()
+  }
+
+  startWaveCountdown() {
+    this.waveState = "countdown"
+    this.countdownRemaining = 5
+    if (this.countdownTimer) {
+      this.countdownTimer.remove(false)
+    }
+
+    this.setStartButtonState(false, "Wave Starting Soon")
     this.updateUI()
+
+    this.countdownTimer = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        if (this.gameOver || this.waveState !== "countdown") return
+
+        this.countdownRemaining -= 1
+        this.updateUI()
+
+        if (this.countdownRemaining > 0) return
+
+        this.countdownTimer?.remove(false)
+        this.countdownTimer = null
+        this.countdownRemaining = 0
+        this.waveState = "intermission"
+        this.startNextWave()
+      }
+    })
   }
 
   getWaveForNumber(waveNumber) {
@@ -945,7 +975,11 @@ Sell: ${refundValue}`
   updateUI() {
     const selectedTower = TOWER_TYPES[this.selectedTowerKey]
     const waveLabel = this.waveIndex + 1
-    const waveStateLabel = this.waveState === "wave" ? "In Progress" : "Intermission"
+    const waveStateLabel = this.waveState === "wave"
+      ? "In Progress"
+      : this.waveState === "countdown"
+        ? `Next wave in: ${this.countdownRemaining}s`
+        : "Intermission"
     const bossLabel = waveLabel % 5 === 0 ? " BOSS WAVE" : ""
     const enemiesRemaining = this.waveState === "wave"
       ? this.waveSpawnRemaining + this.activeEnemyCount()
@@ -966,6 +1000,10 @@ Sell: ${refundValue}`
   endGame(victory = false) {
     if (this.gameOver) return
     this.gameOver = true
+    if (this.countdownTimer) {
+      this.countdownTimer.remove(false)
+      this.countdownTimer = null
+    }
     this.setStartButtonState(false, "Start Wave")
     this.setUpgradeButtonEnabled(false, "Upgrade")
     this.setSellButtonEnabled(false, "Sell")
