@@ -92,8 +92,32 @@ body {
 }
 
 #hud-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   text-align: right;
   color: #aee3ff;
+}
+
+#hud-right-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hud-menu-btn {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: #1e2a33;
+  color: #ffffff;
+  font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+#hud-menu-btn:hover {
+  background: #2a3a45;
 }
 
 #app {
