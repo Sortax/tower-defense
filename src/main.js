@@ -7,6 +7,11 @@ import { WAVES } from "./game/systems/waves"
 const BEST_SCORE_KEY = "tower_defense_best_score"
 const HUD_HIDDEN_DISPLAY = "none"
 const HUD_VISIBLE_DISPLAY = "flex"
+const GAME_MODES = {
+  easy: { key: "easy", label: "Easy", maxWaves: 20 },
+  normal: { key: "normal", label: "Normal", maxWaves: 30 },
+  endless: { key: "endless", label: "Endless", maxWaves: null }
+}
 
 function setHudVisibility(visible) {
   const hud = document.getElementById("hud")
@@ -40,6 +45,7 @@ class MenuScene extends Phaser.Scene {
   create() {
     setHudVisibility(false)
     this.cameras.main.setBackgroundColor("#111")
+    this.selectedModeKey = "normal"
 
     this.add.text(450, 120, "Tower Defense", {
       fontSize: "58px",
@@ -64,7 +70,31 @@ class MenuScene extends Phaser.Scene {
       color: "#aee3ff"
     }).setOrigin(0.5)
 
-    const playButton = this.add.text(450, 520, "Play", {
+    this.add.text(450, 490, "Select Mode", {
+      fontSize: "28px",
+      color: "#ffee88"
+    }).setOrigin(0.5)
+
+    const modeButtonY = 530
+    this.modeButtons = []
+    Object.values(GAME_MODES).forEach((mode, index) => {
+      const button = this.add.text(330 + index * 120, modeButtonY, mode.label, {
+        fontSize: "26px",
+        color: "#cfd8dc",
+        backgroundColor: "#25333d",
+        padding: { x: 12, y: 8 }
+      }).setOrigin(0.5)
+
+      button.setInteractive({ useHandCursor: true })
+      button.on("pointerdown", () => {
+        this.selectedModeKey = mode.key
+        this.updateModeButtonStyles()
+      })
+      this.modeButtons.push({ key: mode.key, button })
+    })
+    this.updateModeButtonStyles()
+
+    const playButton = this.add.text(450, 575, "Play", {
       fontSize: "38px",
       color: "#7fffa0",
       backgroundColor: "#1b3d24",
@@ -75,7 +105,17 @@ class MenuScene extends Phaser.Scene {
     playButton.on("pointerover", () => playButton.setStyle({ color: "#d8ffe6" }))
     playButton.on("pointerout", () => playButton.setStyle({ color: "#7fffa0" }))
     playButton.on("pointerdown", () => {
-      this.scene.start("game")
+      this.scene.start("game", { mode: GAME_MODES[this.selectedModeKey] })
+    })
+  }
+
+  updateModeButtonStyles() {
+    this.modeButtons.forEach(({ key, button }) => {
+      const isActive = key === this.selectedModeKey
+      button.setStyle({
+        color: isActive ? "#ffffff" : "#cfd8dc",
+        backgroundColor: isActive ? "#2f7f46" : "#25333d"
+      })
     })
   }
 }
@@ -87,15 +127,18 @@ class GameOverScene extends Phaser.Scene {
 
   create(data) {
     setHudVisibility(false)
+    const title = data.title ?? "Game Over"
+    const titleColor = data.titleColor ?? "#ff5555"
+    const mode = data.mode ?? GAME_MODES.normal
     const finalWaveReached = data.finalWaveReached ?? 1
     const score = data.score ?? 0
     const bestScore = data.bestScore ?? getBestScore()
 
     this.cameras.main.setBackgroundColor("#111")
 
-    this.add.text(450, 150, "Game Over", {
+    this.add.text(450, 150, title, {
       fontSize: "64px",
-      color: "#ff5555"
+      color: titleColor
     }).setOrigin(0.5)
 
     this.add.text(450, 280, `Final Wave: ${finalWaveReached}\nScore: ${score}\nBest: ${bestScore}`, {
@@ -116,7 +159,7 @@ class GameOverScene extends Phaser.Scene {
     restartButton.on("pointerover", () => restartButton.setStyle({ color: "#d8ffe6" }))
     restartButton.on("pointerout", () => restartButton.setStyle({ color: "#7fffa0" }))
     restartButton.on("pointerdown", () => {
-      this.scene.start("game")
+      this.scene.start("game", { mode })
     })
 
     const menuButton = this.add.text(450, 545, "Menu", {
@@ -138,9 +181,12 @@ class GameScene extends Phaser.Scene {
     super("game")
   }
 
-  create() {
+  create(data) {
     setHudVisibility(true)
     this.cameras.main.setBackgroundColor("#111")
+
+    this.mode = data.mode ?? GAME_MODES.normal
+    this.maxWaves = this.mode.maxWaves
 
     this.tileSize = 48
     this.gridW = 16
@@ -511,6 +557,12 @@ Sell: ${refundValue}`
     this.waveState = "intermission"
     this.waveIndex += 1
     this.wavesCompleted += 1
+
+    if (this.maxWaves && this.waveIndex >= this.maxWaves) {
+      this.endGame(true)
+      return
+    }
+
     this.setStartButtonState(true, `Start Wave ${this.waveIndex + 1}`)
     this.updateUI()
   }
@@ -818,7 +870,7 @@ Sell: ${refundValue}`
       : 0
 
     if (this.hudLeftEl) {
-      this.hudLeftEl.textContent = `Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
+      this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
     }
     if (this.hudRightEl) {
       this.hudRightEl.textContent = `Tower: ${selectedTower.name} [1/2/3]`
@@ -829,7 +881,7 @@ Sell: ${refundValue}`
     }
   }
 
-  endGame() {
+  endGame(victory = false) {
     if (this.gameOver) return
     this.gameOver = true
     this.setStartButtonState(false, "Start Wave")
@@ -842,6 +894,9 @@ Sell: ${refundValue}`
     setBestScore(bestScore)
 
     this.scene.start("gameover", {
+      title: victory ? "You Win" : "Game Over",
+      titleColor: victory ? "#7fffa0" : "#ff5555",
+      mode: this.mode,
       finalWaveReached,
       score,
       bestScore,
