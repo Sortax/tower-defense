@@ -9,6 +9,14 @@
     <div id="hud">
       <div id="hud-left"></div>
       <div id="hud-right"></div>
+      <aside id="tower-panel" class="tower-panel tower-panel--hidden" aria-live="polite">
+        <h2 class="tower-panel__title">Tower</h2>
+        <div id="tower-panel-info" class="tower-panel__info">Select a placed tower to inspect.</div>
+        <div class="tower-panel__actions">
+          <button id="tower-upgrade-btn" type="button">Upgrade</button>
+          <button id="tower-sell-btn" type="button">Sell</button>
+        </div>
+      </aside>
     </div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>

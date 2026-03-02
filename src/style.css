@@ -17,7 +17,7 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
+  right: 220px;
   height: 54px;
   display: flex;
   align-items: center;
@@ -29,6 +29,59 @@ body {
   font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
   border-bottom: 1px solid #2c2c2c;
   z-index: 20;
+}
+
+.tower-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 220px;
+  height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+  border-left: 1px solid #2c2c2c;
+  background: rgba(8, 8, 8, 0.95);
+  color: #f2f2f2;
+  font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  z-index: 30;
+}
+
+.tower-panel--hidden {
+  visibility: hidden;
+}
+
+.tower-panel__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.tower-panel__info {
+  min-height: 120px;
+  white-space: pre-line;
+  color: #ffffff;
+}
+
+.tower-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tower-panel__actions button {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  font: 600 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  border-radius: 4px;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+#tower-upgrade-btn {
+  background: #2e7d32;
+}
+
+#tower-sell-btn {
+  background: #8a2f2f;
 }
 
 #hud-left,
@@ -44,7 +97,7 @@ body {
 }
 
 #app {
-  width: 100vw;
+  width: calc(100vw - 220px);
   height: calc(100vh - 54px);
   margin-top: 54px;
 }
