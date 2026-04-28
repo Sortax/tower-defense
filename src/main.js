@@ -524,7 +524,7 @@ class GameScene extends Phaser.Scene {
               this.waveIndex += 1
               this.wavesCompleted += 1
               if (this.maxWaves && this.waveIndex >= this.maxWaves) { this.endGame(true); return }
-              this.waveState = "intermission"; this.startNextWave()
+              this.startWaveCountdown()
       }
       startWaveCountdown() {
               this.waveState = "countdown"
