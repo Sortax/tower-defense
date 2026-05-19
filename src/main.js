@@ -8,6 +8,8 @@ const BEST_SCORE_KEY = "tower_defense_best_scores"
 const HUD_HIDDEN_DISPLAY = "none"
 const HUD_VISIBLE_DISPLAY = "flex"
 
+function isCompactLayout() { return window.matchMedia("(max-width: 900px)").matches }
+
 const GAME_MODES = {
       easy: { key: "easy", label: "Easy", maxWaves: 20 },
       normal: { key: "normal", label: "Normal", maxWaves: 30 },
@@ -142,12 +144,21 @@ class GameScene extends Phaser.Scene {
               this.towerPanelInfoEl = document.getElementById("tower-panel-info")
               this.towerUpgradeBtnEl = document.getElementById("tower-upgrade-btn")
               this.towerSellBtnEl = document.getElementById("tower-sell-btn")
+              this.towerPanelToggleBtnEl = document.getElementById("tower-panel-toggle-btn")
               this.createWaveControls()
               this.bindTowerPanelControls()
+              this.bindTowerPanelToggleButton()
               this.bindHudMenuButton()
               this.createRangeOverlay()
               this.createGhostOverlay()
               this.scale.on("resize", () => this.layoutGameUi())
+              this.onViewportResize = () => this.layoutGameUi()
+              window.addEventListener("resize", this.onViewportResize, { passive: true })
+              window.addEventListener("orientationchange", this.onViewportResize, { passive: true })
+              this.events.once("shutdown", () => {
+                        window.removeEventListener("resize", this.onViewportResize)
+                        window.removeEventListener("orientationchange", this.onViewportResize)
+              })
               this.layoutGameUi()
               this.bindInput()
               this.updateUI()
@@ -306,7 +317,9 @@ class GameScene extends Phaser.Scene {
   }
       layoutHud() { /* HUD is HTML */ }
       layoutWaveButton() {
-              const padding = this.uiPadding
+              const compact = isCompactLayout()
+              const padding = compact ? 10 : this.uiPadding
+              this.startWaveButtonText.setStyle({ fontSize: compact ? "22px" : "28px", padding: { x: compact ? 10 : 12, y: compact ? 6 : 8 } })
               this.startWaveButtonText.setOrigin(1, 1)
               this.startWaveButtonText.setPosition(this.scale.width - padding, this.scale.height - padding)
       }
@@ -326,6 +339,18 @@ class GameScene extends Phaser.Scene {
               this.onHudMenuButtonClick = (event) => { event.stopPropagation(); event.preventDefault(); this.abandonGameToMenu() }
               this.hudMenuBtnEl.addEventListener("click", this.onHudMenuButtonClick)
               this.events.once("shutdown", () => { this.hudMenuBtnEl?.removeEventListener("click", this.onHudMenuButtonClick) })
+      }
+      bindTowerPanelToggleButton() {
+              if (!this.towerPanelToggleBtnEl) return
+              this.onTowerPanelToggleButtonClick = (event) => {
+                        event.stopPropagation()
+                        event.preventDefault()
+                        const isHidden = this.towerPanelEl?.classList.contains("tower-panel--hidden")
+                        if (isHidden && this.selectedPlacedTower) this.showTowerInfoPanel(this.selectedPlacedTower)
+                        else this.hideTowerInfoPanel()
+              }
+              this.towerPanelToggleBtnEl.addEventListener("click", this.onTowerPanelToggleButtonClick)
+              this.events.once("shutdown", () => { this.towerPanelToggleBtnEl?.removeEventListener("click", this.onTowerPanelToggleButtonClick) })
       }
       abandonGameToMenu() {
               if (this.gameOver) return
@@ -370,8 +395,18 @@ class GameScene extends Phaser.Scene {
 
   selectPlacedTower(tower) { this.selectedPlacedTower = tower; this.showTowerInfoPanel(tower) }
       clearSelectedTower() { this.selectedPlacedTower = null; this.hideTowerInfoPanel() }
-      showTowerInfoPanel(tower) { if (!this.towerPanelEl) return; this.towerPanelEl.classList.remove("tower-panel--hidden"); this.updateTowerInfoPanel(tower); this.drawSelectedTowerRange(tower) }
-      hideTowerInfoPanel() { if (this.towerPanelEl) this.towerPanelEl.classList.add("tower-panel--hidden"); this.drawSelectedTowerRange(null) }
+      showTowerInfoPanel(tower) {
+              if (!this.towerPanelEl) return
+              this.towerPanelEl.classList.remove("tower-panel--hidden")
+              if (this.towerPanelToggleBtnEl) this.towerPanelToggleBtnEl.setAttribute("aria-expanded", "true")
+              this.updateTowerInfoPanel(tower)
+              this.drawSelectedTowerRange(tower)
+      }
+      hideTowerInfoPanel() {
+              if (this.towerPanelEl) this.towerPanelEl.classList.add("tower-panel--hidden")
+              if (this.towerPanelToggleBtnEl) this.towerPanelToggleBtnEl.setAttribute("aria-expanded", "false")
+              this.drawSelectedTowerRange(null)
+      }
       drawSelectedTowerRange(tower) {
               if (!this.rangeGraphics) return
               this.rangeGraphics.clear()
@@ -1193,8 +1228,13 @@ class GameScene extends Phaser.Scene {
               const waveStateLabel = this.waveState === "wave" ? "In Progress" : "Intermission"
               const bossLabel = waveLabel % 5 === 0 ? " BOSS WAVE" : ""
               const enemiesRemaining = this.waveState === "wave" ? this.waveSpawnRemaining + this.activeEnemyCount() : 0
-              if (this.hudLeftEl) this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
-              const selectedTowerLabel = `Tower: ${selectedTower.name} ($${selectedTower.cost}) [1-8]`
+              const compact = isCompactLayout()
+              if (this.hudLeftEl) {
+                        this.hudLeftEl.textContent = compact
+                                  ? `$${this.money} • ❤ ${this.lives} • W${waveLabel}${bossLabel ? " BOSS" : ""} • E ${enemiesRemaining}`
+                                  : `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
+              }
+              const selectedTowerLabel = compact ? `${selectedTower.name} $${selectedTower.cost}` : `Tower: ${selectedTower.name} ($${selectedTower.cost}) [1-8]`
               if (this.hudRightLabelEl) this.hudRightLabelEl.textContent = selectedTowerLabel
               else if (this.hudRightEl) this.hudRightEl.textContent = selectedTowerLabel
               if (this.selectedPlacedTower) this.updateTowerInfoPanel(this.selectedPlacedTower)
@@ -1213,9 +1253,24 @@ class GameScene extends Phaser.Scene {
       }
 }
 
-new Phaser.Game({
+const appBounds = () => {
+      const app = document.getElementById("app")
+      const rect = app?.getBoundingClientRect()
+      return { width: Math.max(320, Math.floor(rect?.width ?? window.innerWidth)), height: Math.max(280, Math.floor(rect?.height ?? window.innerHeight)) }
+}
+
+const initialBounds = appBounds()
+const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: "app",
       scene: [MenuScene, GameScene, GameOverScene],
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: 900, height: 600 }
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: initialBounds.width, height: initialBounds.height }
 })
+
+const resizeGameToLayout = () => {
+      const bounds = appBounds()
+      if (game?.scale) game.scale.resize(bounds.width, bounds.height)
+}
+window.addEventListener("resize", resizeGameToLayout, { passive: true })
+window.addEventListener("orientationchange", resizeGameToLayout, { passive: true })
+resizeGameToLayout()
