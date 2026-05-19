@@ -122,15 +122,13 @@ class GameScene extends Phaser.Scene {
               this.enemies = this.add.group()
               this.projectiles = this.add.group()
               this.towers = []
-                      this.money = 80
+                      this.money = 70
               this.lives = 10
               this.gameOver = false
               this.waveIndex = 0
               this.wavesCompleted = 0
               this.moneyEarned = 0
               this.waveState = "intermission"
-              this.countdownRemaining = 0
-              this.countdownTimer = null
               this.pendingSpawns = 0
               this.waveSpawnRemaining = 0
               this.selectedTowerKey = TOWER_KEY_ORDER[0]
@@ -149,7 +147,6 @@ class GameScene extends Phaser.Scene {
               this.bindHudMenuButton()
               this.createRangeOverlay()
               this.createGhostOverlay()
-              this.createCountdownOverlay()
               this.scale.on("resize", () => this.layoutGameUi())
               this.layoutGameUi()
               this.bindInput()
@@ -313,18 +310,6 @@ class GameScene extends Phaser.Scene {
       layoutGameUi() {
               this.layoutHud()
               this.layoutWaveButton()
-              this.layoutCountdownOverlay()
-      }
-      createCountdownOverlay() {
-              this.countdownOverlayText = this.add.text(0, 0, "", { fontSize: "54px", color: "#ffffff", stroke: "#000000", strokeThickness: 8, align: "center" })
-              this.countdownOverlayText.setOrigin(0.5)
-              this.countdownOverlayText.setDepth(25)
-              this.countdownOverlayText.setVisible(false)
-              this.layoutCountdownOverlay()
-      }
-      layoutCountdownOverlay() {
-              if (!this.countdownOverlayText) return
-              this.countdownOverlayText.setPosition(this.scale.width / 2, this.scale.height / 2)
       }
       showTransientMessage(text, tile) {
               let x = this.scale.width / 2, y = this.scale.height / 2
@@ -342,7 +327,6 @@ class GameScene extends Phaser.Scene {
       abandonGameToMenu() {
               if (this.gameOver) return
               if (!window.confirm("Abandonner la partie et revenir au menu ?")) return
-              if (this.countdownTimer) { this.countdownTimer.remove(false); this.countdownTimer = null }
               this.time.removeAllEvents(); this.gameOver = true; this.scene.start("menu")
       }
       bindTowerPanelControls() {
@@ -497,7 +481,7 @@ class GameScene extends Phaser.Scene {
               this.waveState = "wave"
               this.pendingSpawns = 0
               this.waveSpawnRemaining = 0
-              this.setStartButtonState(false, "Wave In Progress")
+              this.setStartButtonState(false, "Auto Waves")
               this.updateUI()
               let scheduleOffset = 0
               for (const spawnBatch of wave.spawns) {
@@ -530,35 +514,16 @@ class GameScene extends Phaser.Scene {
               this.waveIndex += 1
               this.wavesCompleted += 1
               if (this.maxWaves && this.waveIndex >= this.maxWaves) { this.endGame(true); return }
-              this.startWaveCountdown()
-      }
-      startWaveCountdown() {
-              this.waveState = "countdown"
-              const justFinished = this.getWaveForNumber(this.waveIndex)
-              const delayMs = justFinished?.nextWaveDelay ?? 4000
-              this.countdownRemaining = Math.max(1, Math.round(delayMs / 1000))
-              if (this.countdownTimer) this.countdownTimer.remove(false)
-              this.setStartButtonState(false, "Wave Starting Soon")
-              this.updateUI()
-              this.countdownTimer = this.time.addEvent({
-                        delay: 1000, loop: true, callback: () => {
-                                    if (this.gameOver || this.waveState !== "countdown") return
-                                    this.countdownRemaining -= 1
-                                    this.updateUI()
-                                    if (this.countdownRemaining > 0) return
-                                    this.countdownTimer?.remove(false); this.countdownTimer = null; this.countdownRemaining = 0
-                                    this.waveState = "intermission"
-                                    this.startNextWave()
-                        }
-              })
+              this.waveState = "intermission"
+              this.startNextWave()
       }
       getWaveForNumber(waveNumber) {
               if (waveNumber % 5 === 0) {
-                        return { id: waveNumber, bossWave: true, nextWaveDelay: 5000, spawns: [ { type: "boss", count: 1, interval: 0 }, { type: "grunt", count: 4, interval: 700, gapAfter: 400 }, { type: "fast", count: 6, interval: 250 } ] }
+                        return { id: waveNumber, bossWave: true, spawns: [ { type: "boss", count: 1, interval: 0, gapAfter: 300 }, { type: "armored", count: 6, interval: 540, gapAfter: 300 }, { type: "flyerTank", count: 5, interval: 380, gapAfter: 300 }, { type: "runner", count: 10, interval: 170 } ] }
               }
               const normalWaveNumber = waveNumber - Math.floor(waveNumber / 5)
               const baseWave = WAVES[(normalWaveNumber - 1) % WAVES.length]
-              return { id: waveNumber, bossWave: false, nextWaveDelay: baseWave.nextWaveDelay, spawns: baseWave.spawns }
+              return { id: waveNumber, bossWave: false, spawns: baseWave.spawns }
       }
       drawGrid() {
               const g = this.graphics
@@ -571,11 +536,11 @@ class GameScene extends Phaser.Scene {
                                     const isEntry = x === this.entry.x && y === this.entry.y
                                     const isExit = x === this.exit.x && y === this.exit.y
                                     const isInitialPath = this.pathSet.has(key)
-                                    let color = 0x171717
-                                    if (isInitialPath) color = 0x222222
-                                    if (isEntry) color = 0x1f5f3a
-                                    if (isExit) color = 0x5f2a2a
-                                    g.lineStyle(1, 0x333333)
+                                    let color = 0x182028
+                                    if (isInitialPath) color = 0x2e3842
+                                    if (isEntry) color = 0x1d7f57
+                                    if (isExit) color = 0x8f3434
+                                    g.lineStyle(1, 0x31414f)
                                     g.fillStyle(color)
                                     g.fillRect(wx, wy, this.tileSize, this.tileSize)
                                     g.strokeRect(wx, wy, this.tileSize, this.tileSize)
@@ -595,14 +560,15 @@ class GameScene extends Phaser.Scene {
           const enemyType = ENEMY_TYPES[enemyTypeKey]
           if (!enemyType) return
           const waveOffset = waveNumber - 1
-          const hpScale = 1 + 0.18 * waveOffset
-          const speedScale = 1 + 0.04 * waveOffset
-          const rewardScale = 1 + 0.05 * waveOffset
+          const hpScale = 1 + 0.22 * waveOffset
+          const speedScale = 1 + 0.05 * waveOffset
+          const rewardScale = 1 + 0.06 * waveOffset
           const pos = this.tileCenter(this.entry.x, this.entry.y)
           const enemy = this.add.circle(pos.x, pos.y, enemyType.radius, enemyType.color)
           enemy.enemyType = enemyType.key
           enemy.baseColor = enemyType.color
-          enemy.hp = enemyType.hp * hpScale
+          enemy.maxHp = enemyType.hp * hpScale
+          enemy.hp = enemy.maxHp
           enemy.baseSpeed = enemyType.speed * speedScale
           enemy.reward = Math.max(1, Math.floor(enemyType.reward * rewardScale))
           enemy.slowUntil = 0
@@ -615,7 +581,9 @@ class GameScene extends Phaser.Scene {
           enemy.armor = enemyType.armor ?? 0
           enemy.magicResist = enemyType.magicResist ?? 0
           enemy.immuneToSlow = !!enemyType.immuneToSlow
+          enemy.regenPerSecond = enemyType.regenPerSecond ?? 0
           enemy.radius = enemyType.radius
+          enemy.healthBar = this.add.graphics().setDepth(14)
           if (enemy.flying) {
                     // Flying enemies use straight line from entry to exit
             enemy.path = [ { x: this.entry.x, y: this.entry.y }, { x: this.exit.x, y: this.exit.y } ]
@@ -626,11 +594,25 @@ class GameScene extends Phaser.Scene {
           enemy.wallsVersion = this.wallsVersion
           this.enemies.add(enemy)
   }
+      updateEnemyHealthBar(enemy) {
+              if (!enemy.healthBar) return
+              if (!enemy.active || enemy.isDying) { enemy.healthBar.clear(); return }
+              const width = Math.max(16, enemy.radius * 2)
+              const ratio = Phaser.Math.Clamp(enemy.hp / Math.max(1, enemy.maxHp), 0, 1)
+              const x = enemy.x - width / 2
+              const y = enemy.y - enemy.radius - 8
+              enemy.healthBar.clear()
+              enemy.healthBar.fillStyle(0x000000, 0.6)
+              enemy.healthBar.fillRect(x, y, width, 4)
+              enemy.healthBar.fillStyle(ratio > 0.45 ? 0x5cff8d : ratio > 0.2 ? 0xffd65c : 0xff5c5c, 0.95)
+              enemy.healthBar.fillRect(x, y, width * ratio, 4)
+      }
       updateEnemyColor(enemy) {
               if (!enemy.active || enemy.isDying) return
               if (enemy.isFlashing) { enemy.setFillStyle(0xffffff, 1); return }
               if (enemy.isSlowed) { enemy.setFillStyle(0x66aaff, 1); return }
               enemy.setFillStyle(enemy.baseColor, 1)
+              this.updateEnemyHealthBar(enemy)
       }
       showHitFeedback(enemy, damage) {
               if (!enemy.active || enemy.isDying) return
@@ -651,6 +633,7 @@ class GameScene extends Phaser.Scene {
       playEnemyDeathEffect(enemy) {
               if (!enemy.active || enemy.isDying) return
               enemy.isDying = true
+              enemy.healthBar?.destroy()
               this.tweens.add({ targets: enemy, alpha: 0, scaleX: 0.2, scaleY: 0.2, duration: 140, ease: "Quad.easeIn", onComplete: () => { if (enemy.active) enemy.destroy() } })
       }
       playGunMuzzleFlash(tower) {
@@ -673,6 +656,7 @@ class GameScene extends Phaser.Scene {
               }
               const next = enemy.pathIndex + 1
               if (next >= enemy.path.length) {
+                        enemy.healthBar?.destroy()
                         enemy.destroy()
                         this.lives -= 1
                         this.updateUI()
@@ -685,6 +669,8 @@ class GameScene extends Phaser.Scene {
               const dy = target.y - enemy.y
               const dist = Math.hypot(dx, dy)
               if (dist < 2) { enemy.pathIndex = next; return }
+              if (enemy.regenPerSecond > 0 && enemy.hp > 0 && enemy.hp < enemy.maxHp) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.regenPerSecond * dt)
+              this.updateEnemyHealthBar(enemy)
               const isSlowed = time < enemy.slowUntil
               if (enemy.isSlowed !== isSlowed) { enemy.isSlowed = isSlowed; this.updateEnemyColor(enemy) }
               const f = isSlowed ? enemy.slowFactor : 1
@@ -697,6 +683,8 @@ class GameScene extends Phaser.Scene {
           const isWall = towerType.mode === "wall"
           const size = isWall ? 40 : 26
           const tower = this.add.rectangle(pos.x, pos.y, size, size, towerType.color)
+          if (!isWall) tower.setStrokeStyle(2, 0xf5f8ff, 0.7)
+          else tower.setStrokeStyle(2, 0x555555, 0.9)
           tower.tx = tx
           tower.ty = ty
           tower.typeKey = towerType.key
@@ -836,7 +824,7 @@ class GameScene extends Phaser.Scene {
       updateUI() {
               const selectedTower = TOWER_TYPES[this.selectedTowerKey]
               const waveLabel = this.waveIndex + 1
-              const waveStateLabel = this.waveState === "wave" ? "In Progress" : this.waveState === "countdown" ? `Next wave in: ${this.countdownRemaining}s` : "Intermission"
+              const waveStateLabel = this.waveState === "wave" ? "In Progress" : "Intermission"
               const bossLabel = waveLabel % 5 === 0 ? " BOSS WAVE" : ""
               const enemiesRemaining = this.waveState === "wave" ? this.waveSpawnRemaining + this.activeEnemyCount() : 0
               if (this.hudLeftEl) this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
@@ -844,16 +832,10 @@ class GameScene extends Phaser.Scene {
               if (this.hudRightLabelEl) this.hudRightLabelEl.textContent = selectedTowerLabel
               else if (this.hudRightEl) this.hudRightEl.textContent = selectedTowerLabel
               if (this.selectedPlacedTower) this.updateTowerInfoPanel(this.selectedPlacedTower)
-              if (this.countdownOverlayText) {
-                        const show = this.waveState === "countdown"
-                        this.countdownOverlayText.setVisible(show)
-                        if (show) this.countdownOverlayText.setText(`Next wave in: ${this.countdownRemaining}`)
-              }
       }
       endGame(victory = false) {
               if (this.gameOver) return
               this.gameOver = true
-              if (this.countdownTimer) { this.countdownTimer.remove(false); this.countdownTimer = null }
               this.setStartButtonState(false, "Start Wave")
               this.setUpgradeButtonEnabled(false, "Upgrade")
               this.setSellButtonEnabled(false, "Sell")
