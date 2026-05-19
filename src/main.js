@@ -575,24 +575,90 @@ class GameScene extends Phaser.Scene {
               return c
       }
       createEnemyVisual(enemyTypeKey, radius) {
-              const c = this.add.container(0, 0)
+              const c = this.add.container(0, 0).setDepth(12).setVisible(true).setAlpha(1)
               const g = this.add.graphics()
               c.add(g)
+              const drawDiamond = (w, h) => g.fillPoints([{ x: 0, y: -h }, { x: w, y: 0 }, { x: 0, y: h }, { x: -w, y: 0 }], true)
+              const drawWing = (side, y = 0) => g.fillTriangle(side * (radius * 0.18), y, side * (radius * 1.05), y - radius * 0.25, side * (radius * 0.78), y + radius * 0.42)
               const draw = (fill = 0xff00ff) => {
+                        const dark = Phaser.Display.Color.IntegerToColor(fill).darken(38).color
+                        const light = Phaser.Display.Color.IntegerToColor(fill).brighten(45).color
                         g.clear()
-                        g.fillStyle(fill, 0.95)
-                        g.lineStyle(2, 0xe1eeff, 0.35)
-                        if (["fast", "runner", "flier"].includes(enemyTypeKey)) g.fillTriangle(-radius, radius, 0, -radius, radius, radius)
-                        else if (["tank", "brute", "armored"].includes(enemyTypeKey)) g.fillRoundedRect(-radius, -radius, radius * 2, radius * 2, 3)
-                        else if (enemyTypeKey === "shielded") { g.fillCircle(0, 0, radius - 2); g.lineStyle(2, 0x8dd3ff, 0.9); g.strokeCircle(0, 0, radius + 3) }
-                        else if (enemyTypeKey === "splitter") { g.fillCircle(0, 0, radius - 1); g.lineStyle(2, 0xff9ca8, 0.9); g.strokeLineShape(new Phaser.Geom.Line(-radius + 2, -radius + 2, radius - 2, radius - 2)) }
-                        else if (enemyTypeKey === "boss") { g.fillCircle(0, 0, radius); g.fillStyle(0x2d142f, 0.95); g.fillCircle(0, 0, radius * 0.5); g.strokeCircle(0, 0, radius + 4) }
-                        else g.fillCircle(0, 0, radius)
-                        g.strokeCircle(0, 0, radius)
-                        if (enemyTypeKey === "regenerator") { g.fillStyle(0x5dff96, 0.8); g.fillCircle(0, 0, 4) }
+                        g.fillStyle(dark, 0.98)
+                        g.lineStyle(2, 0xe6f6ff, 0.88)
+                        switch (enemyTypeKey) {
+                                  case "grunt":
+                                            drawDiamond(radius * 0.9, radius * 0.95)
+                                            g.fillStyle(light, 0.95); g.fillCircle(0, -2, radius * 0.34)
+                                            g.fillStyle(0xffecff, 0.92); g.fillCircle(0, -2, Math.max(2, radius * 0.15))
+                                            break
+                                  case "fast":
+                                            g.fillTriangle(0, -radius, radius * 0.85, radius * 0.7, -radius * 0.85, radius * 0.7)
+                                            g.fillStyle(light, 0.9); g.fillRect(-radius * 0.2, -radius * 0.35, radius * 0.4, radius * 0.95)
+                                            break
+                                  case "runner":
+                                            g.fillTriangle(0, -radius, radius * 0.6, radius * 0.82, -radius * 0.6, radius * 0.82)
+                                            g.fillStyle(light, 0.88); g.fillTriangle(0, -radius * 0.78, radius * 0.28, radius * 0.5, -radius * 0.28, radius * 0.5)
+                                            break
+                                  case "tank":
+                                            g.fillRoundedRect(-radius, -radius * 0.82, radius * 2, radius * 1.64, 5)
+                                            g.fillStyle(light, 0.88); g.fillRoundedRect(-radius * 0.52, -radius * 0.3, radius * 1.04, radius * 0.6, 3)
+                                            break
+                                  case "brute":
+                                            g.fillRoundedRect(-radius * 1.03, -radius * 0.9, radius * 2.06, radius * 1.8, 7)
+                                            g.fillStyle(light, 0.9); g.fillRect(-radius * 0.75, -radius * 0.22, radius * 1.5, radius * 0.44)
+                                            break
+                                  case "armored":
+                                            g.fillRoundedRect(-radius, -radius * 0.8, radius * 2, radius * 1.6, 4)
+                                            g.fillStyle(0x95a6b8, 0.9); g.fillRect(-radius * 0.88, -radius * 0.15, radius * 1.76, radius * 0.3)
+                                            g.fillRect(-radius * 0.35, -radius * 0.63, radius * 0.7, radius * 1.26)
+                                            break
+                                  case "shielded":
+                                            drawDiamond(radius * 0.82, radius * 0.88)
+                                            g.fillStyle(light, 0.9); g.fillCircle(0, 0, radius * 0.28)
+                                            g.lineStyle(2, 0x8dd3ff, 0.92); g.strokeCircle(0, 0, radius + 4)
+                                            g.lineStyle(1.2, 0xbde8ff, 0.6); g.strokeCircle(0, 0, radius + 7)
+                                            break
+                                  case "flier":
+                                            g.fillRoundedRect(-radius * 0.55, -radius * 0.65, radius * 1.1, radius * 1.25, 3)
+                                            g.fillStyle(light, 0.92); drawWing(-1); drawWing(1)
+                                            break
+                                  case "flyerTank":
+                                            g.fillRoundedRect(-radius * 0.64, -radius * 0.72, radius * 1.28, radius * 1.42, 4)
+                                            g.fillStyle(light, 0.9); drawWing(-1, radius * 0.1); drawWing(1, radius * 0.1)
+                                            g.fillStyle(0xd7ecff, 0.8); g.fillRect(-radius * 0.23, -radius * 0.2, radius * 0.46, radius * 0.7)
+                                            break
+                                  case "regenerator":
+                                            drawDiamond(radius * 0.9, radius * 0.95)
+                                            g.fillStyle(0x66ffb2, 0.92); g.fillCircle(0, 0, radius * 0.38)
+                                            g.fillStyle(0xc8ffe3, 0.95); g.fillCircle(0, 0, Math.max(3, radius * 0.18))
+                                            break
+                                  case "splitter":
+                                            g.fillCircle(0, 0, radius * 0.88)
+                                            g.fillStyle(light, 0.83); g.fillTriangle(-radius * 0.78, -radius * 0.1, 0, -radius * 0.86, radius * 0.22, radius * 0.2)
+                                            g.fillTriangle(radius * 0.72, 0.16 * radius, 0.05 * radius, radius * 0.9, -radius * 0.22, -radius * 0.15)
+                                            g.lineStyle(1.5, 0xf9c7ff, 0.85); g.strokeLineShape(new Phaser.Geom.Line(-radius * 0.6, -radius * 0.35, radius * 0.6, radius * 0.35))
+                                            break
+                                  case "boss":
+                                            g.fillRoundedRect(-radius * 1.05, -radius * 0.95, radius * 2.1, radius * 1.9, 8)
+                                            g.fillStyle(light, 0.9); g.fillRoundedRect(-radius * 0.75, -radius * 0.6, radius * 1.5, radius * 1.2, 6)
+                                            g.fillStyle(0x1f1330, 0.95); g.fillCircle(0, 0, radius * 0.36)
+                                            g.lineStyle(2.2, 0xd8b7ff, 0.9); g.strokeCircle(0, 0, radius + 5)
+                                            break
+                                  default:
+                                            g.fillCircle(0, 0, radius)
+                        }
+                        g.strokeCircle(0, 0, radius * 0.95)
               }
               c.redrawEnemy = draw
               return c
+      }
+
+      refreshEnemyVisual(enemy) {
+              if (!enemy?.active || enemy.isDying) return
+              enemy.setVisible(true).setAlpha(1)
+              this.updateEnemyColor(enemy)
+              this.updateEnemyHealthBar(enemy)
       }
 
   spawnEnemy(enemyTypeKey, waveNumber = this.waveIndex + 1) {
@@ -636,6 +702,7 @@ class GameScene extends Phaser.Scene {
           enemy.pathIndex = 0
           enemy.wallsVersion = this.wallsVersion
           this.enemies.add(enemy)
+          this.refreshEnemyVisual(enemy)
           if (enemy.enemyType === "boss") this.playBossSpawnEffect(enemy)
   }
       updateEnemyHealthBar(enemy) {
@@ -653,10 +720,28 @@ class GameScene extends Phaser.Scene {
       }
       updateEnemyColor(enemy) {
               if (!enemy.active || enemy.isDying) return
-              if (enemy.isFlashing) { enemy.redrawEnemy(0xffffff); return }
-              if (enemy.isSlowed) { enemy.redrawEnemy(0x66aaff); return }
-              enemy.redrawEnemy(enemy.baseColor)
+              if (enemy.isFlashing) enemy.redrawEnemy(0xffffff)
+              else if (enemy.isSlowed) enemy.redrawEnemy(0x66aaff)
+              else enemy.redrawEnemy(enemy.baseColor)
               this.updateEnemyHealthBar(enemy)
+      }
+      updateEnemyStatusEffects(enemy, time) {
+              if (!enemy?.active || enemy.isDying) return
+              const isSlowed = time < enemy.slowUntil
+              if (enemy.isSlowed !== isSlowed) {
+                        enemy.isSlowed = isSlowed
+                        this.updateEnemyColor(enemy)
+              }
+              if (!isSlowed && enemy.visualEffects?.slowRing) {
+                        enemy.visualEffects.slowRing.destroy()
+                        enemy.visualEffects.slowRing = null
+              }
+      }
+      destroyEnemyVisual(enemy) {
+              if (!enemy) return
+              this.clearEnemyEffects(enemy)
+              enemy.healthBar?.destroy()
+              enemy.healthBar = null
       }
       showHitFeedback(enemy, damage) {
               if (!enemy.active || enemy.isDying) return
@@ -677,7 +762,7 @@ class GameScene extends Phaser.Scene {
       playEnemyDeathEffect(enemy) {
               if (!enemy.active || enemy.isDying) return
               enemy.isDying = true
-              enemy.healthBar?.destroy()
+              this.destroyEnemyVisual(enemy)
               this.tweens.add({ targets: enemy, alpha: 0, scaleX: 0.2, scaleY: 0.2, duration: 140, ease: "Quad.easeIn", onComplete: () => { if (enemy.active) enemy.destroy() } })
       }
       playGunShotEffect(tower, target) {
@@ -766,8 +851,7 @@ class GameScene extends Phaser.Scene {
               }
               const next = enemy.pathIndex + 1
               if (next >= enemy.path.length) {
-                        this.clearEnemyEffects(enemy)
-                        enemy.healthBar?.destroy()
+                        this.destroyEnemyVisual(enemy)
                         enemy.destroy()
                         this.lives -= 1
                         this.updateUI()
@@ -787,14 +871,13 @@ class GameScene extends Phaser.Scene {
               }
               if (enemy.dot && time > enemy.dot.until) { enemy.dot = null; this.detachBurnEffect(enemy) }
               this.updateEnemyHealthBar(enemy)
-              const isSlowed = time < enemy.slowUntil
-              if (enemy.isSlowed !== isSlowed) { enemy.isSlowed = isSlowed; this.updateEnemyColor(enemy) }
+              this.updateEnemyStatusEffects(enemy, time)
+              const isSlowed = enemy.isSlowed
               const f = isSlowed ? enemy.slowFactor : 1
               enemy.x += (dx / dist) * enemy.baseSpeed * f * dt
               enemy.y += (dy / dist) * enemy.baseSpeed * f * dt
               if (enemy.visualEffects?.burn) enemy.visualEffects.burn.setPosition(enemy.x, enemy.y)
               if (enemy.visualEffects?.slowRing) enemy.visualEffects.slowRing.setPosition(enemy.x, enemy.y)
-              if (!isSlowed && enemy.visualEffects?.slowRing) { enemy.visualEffects.slowRing.destroy(); enemy.visualEffects.slowRing = null }
       }
 
   placeTower(tx, ty, towerType) {
