@@ -586,6 +586,7 @@ class GameScene extends Phaser.Scene {
           enemy.immuneToSlow = !!enemyType.immuneToSlow
           enemy.regenPerSecond = enemyType.regenPerSecond ?? 0
           enemy.dot = null
+          enemy.visualEffects = {}
           enemy.radius = enemyType.radius
           enemy.healthBar = this.add.graphics().setDepth(14)
           if (enemy.flying) {
@@ -597,6 +598,7 @@ class GameScene extends Phaser.Scene {
           enemy.pathIndex = 0
           enemy.wallsVersion = this.wallsVersion
           this.enemies.add(enemy)
+          if (enemy.enemyType === "boss") this.playBossSpawnEffect(enemy)
   }
       updateEnemyHealthBar(enemy) {
               if (!enemy.healthBar) return
@@ -640,15 +642,81 @@ class GameScene extends Phaser.Scene {
               enemy.healthBar?.destroy()
               this.tweens.add({ targets: enemy, alpha: 0, scaleX: 0.2, scaleY: 0.2, duration: 140, ease: "Quad.easeIn", onComplete: () => { if (enemy.active) enemy.destroy() } })
       }
-      playGunMuzzleFlash(tower) {
-              const flash = this.add.circle(tower.x, tower.y, 6, 0xfff2a8, 0.9)
-              flash.setDepth(12)
-              this.tweens.add({ targets: flash, alpha: 0, scaleX: 1.8, scaleY: 1.8, duration: 90, ease: "Quad.easeOut", onComplete: () => flash.destroy() })
+      playGunShotEffect(tower, target) {
+              const flash = this.add.circle(tower.x, tower.y, 10, 0xfff4bf, 0.95).setDepth(15)
+              this.tweens.add({ targets: flash, alpha: 0, scaleX: 2, scaleY: 2, duration: 90, ease: "Quad.easeOut", onComplete: () => flash.destroy() })
+              const tracer = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xfff2b8, 0.9).setOrigin(0, 0).setDepth(14)
+              tracer.setLineWidth(2, 1)
+              this.tweens.add({ targets: tracer, alpha: 0, duration: 80, ease: "Linear", onComplete: () => tracer.destroy() })
+              this.playImpactEffect(target.x, target.y, 0xffe2b7, 5)
       }
-      playExplosionEffect(x, y, color = 0xffb366) {
-              const explosion = this.add.circle(x, y, 8, color, 0.7)
-              explosion.setDepth(12)
-              this.tweens.add({ targets: explosion, radius: 36, alpha: 0, duration: 220, ease: "Quad.easeOut", onComplete: () => explosion.destroy() })
+      playImpactEffect(x, y, color = 0xffffff, radius = 6) {
+              const impact = this.add.circle(x, y, radius, color, 0.65).setDepth(15)
+              this.tweens.add({ targets: impact, alpha: 0, scaleX: 1.6, scaleY: 1.6, duration: 110, ease: "Quad.easeOut", onComplete: () => impact.destroy() })
+      }
+      playSlowEffect(tower, target) {
+              const beam = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0x9de7ff, 0.85).setOrigin(0, 0).setDepth(13)
+              beam.setLineWidth(3, 2)
+              this.tweens.add({ targets: beam, alpha: 0, duration: 120, onComplete: () => beam.destroy() })
+              const pulse = this.add.circle(target.x, target.y, target.radius + 2, 0x8edcff, 0.25).setDepth(13)
+              this.tweens.add({ targets: pulse, radius: target.radius + 10, alpha: 0, duration: 180, ease: "Quad.easeOut", onComplete: () => pulse.destroy() })
+      }
+      playAoeExplosionEffect(x, y, radius) {
+              const core = this.add.circle(x, y, 10, 0xffb56b, 0.7).setDepth(14)
+              this.tweens.add({ targets: core, radius: Math.max(24, radius * 0.45), alpha: 0, duration: 180, onComplete: () => core.destroy() })
+              const ring = this.add.circle(x, y, 8, 0xffe3b7, 0).setStrokeStyle(3, 0xffc788, 0.95).setDepth(14)
+              this.tweens.add({ targets: ring, radius: radius, alpha: 0, duration: 240, ease: "Cubic.easeOut", onComplete: () => ring.destroy() })
+              for (let i = 0; i < 6; i++) {
+                        const shard = this.add.circle(x, y, 2, 0xffd3a1, 0.8).setDepth(14)
+                        const angle = (Math.PI * 2 * i) / 6 + Phaser.Math.FloatBetween(-0.25, 0.25)
+                        const dist = Phaser.Math.Between(12, Math.max(16, Math.floor(radius * 0.4)))
+                        this.tweens.add({ targets: shard, x: x + Math.cos(angle) * dist, y: y + Math.sin(angle) * dist, alpha: 0, duration: 220, onComplete: () => shard.destroy() })
+              }
+      }
+      playMissileTrailEffect(projectile, prevX, prevY) {
+              const trail = this.add.line(0, 0, prevX, prevY, projectile.x, projectile.y, 0xffc57a, 0.6).setOrigin(0, 0).setDepth(12)
+              trail.setLineWidth(3, 1)
+              this.tweens.add({ targets: trail, alpha: 0, duration: 120, onComplete: () => trail.destroy() })
+      }
+      playMissileExplosionEffect(x, y, radius) {
+              this.playAoeExplosionEffect(x, y, radius)
+              const smokeRing = this.add.circle(x, y, 12, 0x8a6f57, 0.3).setDepth(13)
+              this.tweens.add({ targets: smokeRing, radius: radius * 0.7, alpha: 0, duration: 260, onComplete: () => smokeRing.destroy() })
+      }
+      playPiercerEffect(tower, target) {
+              const line = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xf2f6ff, 0.95).setOrigin(0, 0).setDepth(14)
+              line.setLineWidth(3, 2)
+              this.tweens.add({ targets: line, alpha: 0, duration: 90, onComplete: () => line.destroy() })
+              this.playImpactEffect(target.x, target.y, 0xd7e7ff, 7)
+      }
+      playTeslaChainEffect(jumps) {
+              jumps.forEach((j, idx) => {
+                        const graphics = this.add.graphics().setDepth(15)
+                        graphics.lineStyle(2.2, 0x8cb0ff, 0.95)
+                        const points = [{ x: j.fromX, y: j.fromY }]
+                        const segments = 6
+                        for (let i = 1; i < segments; i++) {
+                                  const t = i / segments
+                                  const bx = Phaser.Math.Linear(j.fromX, j.toX, t)
+                                  const by = Phaser.Math.Linear(j.fromY, j.toY, t)
+                                  const jitter = idx === 0 ? 6 : 4
+                                  points.push({ x: bx + Phaser.Math.Between(-jitter, jitter), y: by + Phaser.Math.Between(-jitter, jitter) })
+                        }
+                        points.push({ x: j.toX, y: j.toY })
+                        graphics.beginPath()
+                        graphics.moveTo(points[0].x, points[0].y)
+                        for (let i = 1; i < points.length; i++) graphics.lineTo(points[i].x, points[i].y)
+                        graphics.strokePath()
+                        const flash = this.add.circle(j.toX, j.toY, 7, 0x9cb2ff, 0.45).setDepth(15)
+                        this.tweens.add({ targets: [graphics, flash], alpha: 0, duration: 100, onComplete: () => { graphics.destroy(); flash.destroy() } })
+              })
+      }
+      playPyroShotEffect(tower, target) {
+              const flame = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xff9a44, 0.9).setOrigin(0, 0).setDepth(14)
+              flame.setLineWidth(4, 2)
+              this.tweens.add({ targets: flame, alpha: 0, duration: 100, onComplete: () => flame.destroy() })
+              const burst = this.add.circle(target.x, target.y, 6, 0xff6b2e, 0.6).setDepth(14)
+              this.tweens.add({ targets: burst, alpha: 0, scaleX: 1.8, scaleY: 1.8, duration: 120, onComplete: () => burst.destroy() })
       }
       moveEnemy(enemy, dt, time) {
               if (this.gameOver || enemy.isDying) return
@@ -660,6 +728,7 @@ class GameScene extends Phaser.Scene {
               }
               const next = enemy.pathIndex + 1
               if (next >= enemy.path.length) {
+                        this.clearEnemyEffects(enemy)
                         enemy.healthBar?.destroy()
                         enemy.destroy()
                         this.lives -= 1
@@ -678,13 +747,16 @@ class GameScene extends Phaser.Scene {
                         this.applyDamage(enemy, enemy.dot.damage, enemy.dot.type)
                         enemy.dot.nextTick += enemy.dot.tick
               }
-              if (enemy.dot && time > enemy.dot.until) enemy.dot = null
+              if (enemy.dot && time > enemy.dot.until) { enemy.dot = null; this.detachBurnEffect(enemy) }
               this.updateEnemyHealthBar(enemy)
               const isSlowed = time < enemy.slowUntil
               if (enemy.isSlowed !== isSlowed) { enemy.isSlowed = isSlowed; this.updateEnemyColor(enemy) }
               const f = isSlowed ? enemy.slowFactor : 1
               enemy.x += (dx / dist) * enemy.baseSpeed * f * dt
               enemy.y += (dy / dist) * enemy.baseSpeed * f * dt
+              if (enemy.visualEffects?.burn) enemy.visualEffects.burn.setPosition(enemy.x, enemy.y)
+              if (enemy.visualEffects?.slowRing) enemy.visualEffects.slowRing.setPosition(enemy.x, enemy.y)
+              if (!isSlowed && enemy.visualEffects?.slowRing) { enemy.visualEffects.slowRing.destroy(); enemy.visualEffects.slowRing = null }
       }
 
   placeTower(tx, ty, towerType) {
@@ -756,10 +828,14 @@ class GameScene extends Phaser.Scene {
               tower.lastShot = time
               if (tower.mode === "projectile_aoe") { this.spawnMissileProjectile(tower, target); return }
               if (tower.mode === "chain") { this.fireChainLightning(tower, target); return }
-              const beam = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xffffaa)
-              beam.setOrigin(0, 0)
-              this.time.delayedCall(60, () => beam.destroy())
-              if (tower.mode === "single") this.playGunMuzzleFlash(tower)
+              if (tower.mode === "single") this.playGunShotEffect(tower, target)
+              if (tower.mode === "slow") this.playSlowEffect(tower, target)
+              if (tower.mode === "aoe") {
+                        const aoeRadius = Math.max(26, tower.splashRadius)
+                        this.playAoeExplosionEffect(target.x, target.y, aoeRadius)
+              }
+              if (tower.mode === "dot") this.playPyroShotEffect(tower, target)
+              if (tower.mode === "anti_armor") this.playPiercerEffect(tower, target)
               if (tower.mode === "aoe") {
                         const enemiesInSplash = enemies.filter((enemy) => {
                                     if (!enemy.active || enemy.isDying) return false
@@ -776,6 +852,7 @@ class GameScene extends Phaser.Scene {
                         target.slowFactor = Math.min(target.slowFactor || 1, tower.slowFactor)
                         target.slowUntil = Math.max(target.slowUntil || 0, time + tower.slowDuration)
                         target.isSlowed = true
+                        this.attachSlowEffect(target)
                         this.updateEnemyColor(target)
               }
       }
@@ -816,12 +893,7 @@ class GameScene extends Phaser.Scene {
                         current = next
                         damage *= tower.chainFalloff
               }
-              jumps.forEach((j) => {
-                        const beam = this.add.line(0, 0, j.fromX, j.fromY, j.toX, j.toY, 0xb7c4ff)
-                        beam.setLineWidth(2, 2)
-                        beam.setOrigin(0, 0).setDepth(13)
-                        this.time.delayedCall(70, () => beam.destroy())
-              })
+              this.playTeslaChainEffect(jumps)
       }
       applyDot(enemy, tower) {
               if (!enemy.active || enemy.isDying) return
@@ -833,6 +905,7 @@ class GameScene extends Phaser.Scene {
                         until: now + tower.dotDuration,
                         nextTick: now + tower.dotTick
               }
+              this.attachBurnEffect(enemy)
       }
 
       updateProjectile(projectile, dt) {
@@ -851,14 +924,17 @@ class GameScene extends Phaser.Scene {
                                     return splashDistance <= projectile.splashRadius
                         })
                         enemiesInSplash.forEach((enemy) => this.applyDamage(enemy, projectile.damage, projectile.damageType))
-                        this.playExplosionEffect(projectile.x, projectile.y)
+                        this.playMissileExplosionEffect(projectile.x, projectile.y, projectile.splashRadius)
                         projectile.setActive(false).setVisible(false)
                         return
               }
               const step = projectile.speed * dt
               const ratio = Math.min(1, step / dist)
+              const prevX = projectile.x
+              const prevY = projectile.y
               projectile.x += dx * ratio
               projectile.y += dy * ratio
+              this.playMissileTrailEffect(projectile, prevX, prevY)
       }
       applyDamage(enemy, damage, damageType = "physical", sourceTower = null) {
               if (!enemy.active || enemy.isDying) return
@@ -870,13 +946,48 @@ class GameScene extends Phaser.Scene {
                         final = Math.max(1, final - Math.max(0, enemy.armor - pierce))
                         if (sourceTower?.bonusVs?.includes(enemy.enemyType)) final *= sourceTower.bonusMultiplier ?? 1
               }
+              if (sourceTower?.mode === "dot") this.playBurnTickEffect(enemy)
               this.showHitFeedback(enemy, final)
               enemy.hp -= final
               if (enemy.hp > 0) return
+              this.clearEnemyEffects(enemy)
               this.playEnemyDeathEffect(enemy)
               this.money += enemy.reward
               this.moneyEarned += enemy.reward
               this.updateUI()
+      }
+      attachBurnEffect(enemy) {
+              if (!enemy.active || enemy.isDying) return
+              if (enemy.visualEffects?.burn) return
+              const aura = this.add.circle(enemy.x, enemy.y, enemy.radius + 5, 0xff7b2f, 0.25).setDepth(11)
+              enemy.visualEffects.burn = aura
+      }
+      detachBurnEffect(enemy) {
+              const burn = enemy.visualEffects?.burn
+              if (burn) burn.destroy()
+              if (enemy.visualEffects) enemy.visualEffects.burn = null
+      }
+      playBurnTickEffect(enemy) {
+              if (!enemy.active || enemy.isDying) return
+              const spark = this.add.circle(enemy.x, enemy.y, 3, 0xffb347, 0.8).setDepth(16)
+              this.tweens.add({ targets: spark, y: enemy.y - 10, alpha: 0, duration: 140, onComplete: () => spark.destroy() })
+      }
+      attachSlowEffect(enemy) {
+              if (!enemy.active || enemy.isDying || enemy.immuneToSlow) return
+              if (enemy.visualEffects?.slowRing) return
+              const ring = this.add.circle(enemy.x, enemy.y, enemy.radius + 6, 0x8fd9ff, 0).setStrokeStyle(2, 0x8fd9ff, 0.85).setDepth(11)
+              enemy.visualEffects.slowRing = ring
+      }
+      clearEnemyEffects(enemy) {
+              if (!enemy?.visualEffects) return
+              Object.values(enemy.visualEffects).forEach((fx) => { if (fx?.destroy) fx.destroy() })
+              enemy.visualEffects = {}
+      }
+      playBossSpawnEffect(enemy) {
+              const ring = this.add.circle(enemy.x, enemy.y, enemy.radius + 8, 0xa96bff, 0).setStrokeStyle(3, 0xa96bff, 0.95).setDepth(13)
+              this.tweens.add({ targets: ring, radius: enemy.radius + 34, alpha: 0, duration: 380, ease: "Cubic.easeOut", onComplete: () => ring.destroy() })
+              const pulse = this.add.circle(enemy.x, enemy.y, enemy.radius + 2, 0xb67cff, 0.2).setDepth(10)
+              this.tweens.add({ targets: pulse, alpha: { from: 0.28, to: 0.08 }, yoyo: true, repeat: 6, duration: 320, onComplete: () => pulse.destroy() })
       }
       activeEnemyCount() {
               let n = 0
