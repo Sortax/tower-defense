@@ -9,6 +9,9 @@ const HUD_HIDDEN_DISPLAY = "none"
 const HUD_VISIBLE_DISPLAY = "flex"
 
 function isCompactLayout() { return window.matchMedia("(max-width: 900px)").matches }
+function isPortraitMobileLayout() {
+      return window.matchMedia("(max-width: 900px) and (orientation: portrait)").matches
+}
 
 const GAME_MODES = {
       easy: { key: "easy", label: "Easy", maxWaves: 20 },
@@ -48,26 +51,59 @@ class MenuScene extends Phaser.Scene {
               setHudVisibility(false)
               this.cameras.main.setBackgroundColor("#111")
               this.selectedModeKey = "normal"
-              this.add.text(450, 90, "Tower Defense", { fontSize: "58px", color: "#ffffff" }).setOrigin(0.5)
-              this.add.text(450, 190, "Instructions", { fontSize: "26px", color: "#ffee88" }).setOrigin(0.5)
-              this.add.text(450, 270, "1-8: Select tower\nClick empty tile: Place\nClick tower: Upgrade / Sell\nEntry: top-left  |  Exit: bottom-right\nWalls reroute enemies (BFS)", { fontSize: "18px", color: "#ffffff", align: "center", lineSpacing: 6 }).setOrigin(0.5)
+              this.menuTitle = this.add.text(450, 90, "Tower Defense", { fontSize: "58px", color: "#ffffff" }).setOrigin(0.5)
+              this.instructionsTitle = this.add.text(450, 190, "Instructions", { fontSize: "26px", color: "#ffee88" }).setOrigin(0.5)
+              this.instructionsText = this.add.text(450, 270, "1-8: Select tower\nClick empty tile: Place\nClick tower: Upgrade / Sell\nEntry: top-left  |  Exit: bottom-right\nWalls reroute enemies (BFS)", { fontSize: "18px", color: "#ffffff", align: "center", lineSpacing: 6 }).setOrigin(0.5)
               const scores = getBestScores()
-              this.add.text(450, 390, `Best - Easy: ${scores.easy} | Normal: ${scores.normal} | Endless: ${scores.endless}`, { fontSize: "18px", color: "#aee3ff" }).setOrigin(0.5)
-              this.add.text(450, 430, "Select Mode", { fontSize: "24px", color: "#ffee88" }).setOrigin(0.5)
-              const modeButtonY = 480
+              this.bestScoresText = this.add.text(450, 390, `Best - Easy: ${scores.easy} | Normal: ${scores.normal} | Endless: ${scores.endless}`, { fontSize: "18px", color: "#aee3ff", align: "center" }).setOrigin(0.5)
+              this.selectModeText = this.add.text(450, 430, "Select Mode", { fontSize: "24px", color: "#ffee88" }).setOrigin(0.5)
               this.modeButtons = []
                       Object.values(GAME_MODES).forEach((mode, index) => {
-                                const button = this.add.text(330 + index * 120, modeButtonY, mode.label, { fontSize: "24px", color: "#cfd8dc", backgroundColor: "#25333d", padding: { x: 12, y: 8 } }).setOrigin(0.5)
+                                const button = this.add.text(330 + index * 120, 480, mode.label, { fontSize: "24px", color: "#cfd8dc", backgroundColor: "#25333d", padding: { x: 12, y: 8 } }).setOrigin(0.5)
                                 button.setInteractive({ useHandCursor: true })
                                 button.on("pointerdown", () => { this.selectedModeKey = mode.key; this.updateModeButtonStyles() })
                                 this.modeButtons.push({ key: mode.key, button })
                       })
               this.updateModeButtonStyles()
-              const playButton = this.add.text(450, 555, "Play", { fontSize: "36px", color: "#7fffa0", backgroundColor: "#1b3d24", padding: { x: 20, y: 10 } }).setOrigin(0.5)
-              playButton.setInteractive({ useHandCursor: true })
-              playButton.on("pointerover", () => playButton.setStyle({ color: "#d8ffe6" }))
-              playButton.on("pointerout", () => playButton.setStyle({ color: "#7fffa0" }))
-              playButton.on("pointerdown", () => { this.scene.start("game", { mode: GAME_MODES[this.selectedModeKey] }) })
+              this.playButton = this.add.text(450, 555, "Play", { fontSize: "36px", color: "#7fffa0", backgroundColor: "#1b3d24", padding: { x: 20, y: 10 } }).setOrigin(0.5)
+              this.playButton.setInteractive({ useHandCursor: true })
+              this.playButton.on("pointerover", () => this.playButton.setStyle({ color: "#d8ffe6" }))
+              this.playButton.on("pointerout", () => this.playButton.setStyle({ color: "#7fffa0" }))
+              this.playButton.on("pointerdown", () => { this.scene.start("game", { mode: GAME_MODES[this.selectedModeKey] }) })
+              this.scale.on("resize", () => this.layoutMenuResponsive())
+              this.layoutMenuResponsive()
+      }
+      layoutMenuResponsive() {
+              const width = this.scale.width
+              const height = this.scale.height
+              const centerX = width / 2
+              const compactPortrait = isPortraitMobileLayout()
+              const horizontalPadding = compactPortrait ? 18 : 0
+              const maxTextWidth = Math.max(280, width - horizontalPadding * 2)
+              if (compactPortrait) {
+                        this.menuTitle.setStyle({ fontSize: "38px" }).setPosition(centerX, height * 0.1).setWordWrapWidth(maxTextWidth)
+                        this.instructionsTitle.setStyle({ fontSize: "20px" }).setPosition(centerX, height * 0.2)
+                        this.instructionsText.setStyle({ fontSize: "14px", lineSpacing: 3 }).setPosition(centerX, height * 0.34).setWordWrapWidth(maxTextWidth)
+                        this.bestScoresText.setStyle({ fontSize: "14px" }).setPosition(centerX, height * 0.54).setWordWrapWidth(maxTextWidth)
+                        this.selectModeText.setStyle({ fontSize: "19px" }).setPosition(centerX, height * 0.62)
+                        const startX = centerX - 95
+                        this.modeButtons.forEach(({ button }, index) => {
+                                  button.setStyle({ fontSize: "18px", padding: { x: 10, y: 6 } })
+                                  button.setPosition(startX + index * 95, height * 0.72)
+                        })
+                        this.playButton.setStyle({ fontSize: "30px", padding: { x: 18, y: 8 } }).setPosition(centerX, height * 0.84)
+                        return
+              }
+              this.menuTitle.setStyle({ fontSize: "58px" }).setPosition(centerX, 90).setWordWrapWidth(0)
+              this.instructionsTitle.setStyle({ fontSize: "26px" }).setPosition(centerX, 190)
+              this.instructionsText.setStyle({ fontSize: "18px", lineSpacing: 6 }).setPosition(centerX, 270).setWordWrapWidth(0)
+              this.bestScoresText.setStyle({ fontSize: "18px" }).setPosition(centerX, 390).setWordWrapWidth(0)
+              this.selectModeText.setStyle({ fontSize: "24px" }).setPosition(centerX, 430)
+              this.modeButtons.forEach(({ button }, index) => {
+                        button.setStyle({ fontSize: "24px", padding: { x: 12, y: 8 } })
+                        button.setPosition(centerX - 120 + index * 120, 480)
+              })
+              this.playButton.setStyle({ fontSize: "36px", padding: { x: 20, y: 10 } }).setPosition(centerX, 555)
       }
       updateModeButtonStyles() {
               this.modeButtons.forEach(({ key, button }) => {
@@ -88,16 +124,36 @@ class GameOverScene extends Phaser.Scene {
               const score = data.score ?? 0
               const bestScore = data.bestScore ?? getBestScore(mode.key)
               this.cameras.main.setBackgroundColor("#111")
-              this.add.text(450, 150, title, { fontSize: "64px", color: titleColor }).setOrigin(0.5)
-              this.add.text(450, 280, `Mode: ${mode.label}\nFinal Wave: ${finalWaveReached}\nScore: ${score}\nBest (${mode.label}): ${bestScore}`, { fontSize: "26px", color: "#ffffff", align: "center", lineSpacing: 10 }).setOrigin(0.5)
-              const restartButton = this.add.text(450, 470, "Restart", { fontSize: "36px", color: "#7fffa0", backgroundColor: "#1b3d24", padding: { x: 20, y: 10 } }).setOrigin(0.5)
+              this.titleText = this.add.text(450, 150, title, { fontSize: "64px", color: titleColor }).setOrigin(0.5)
+              this.resultText = this.add.text(450, 280, `Mode: ${mode.label}\nFinal Wave: ${finalWaveReached}\nScore: ${score}\nBest (${mode.label}): ${bestScore}`, { fontSize: "26px", color: "#ffffff", align: "center", lineSpacing: 10 }).setOrigin(0.5)
+              const restartButton = this.restartButton = this.add.text(450, 470, "Restart", { fontSize: "36px", color: "#7fffa0", backgroundColor: "#1b3d24", padding: { x: 20, y: 10 } }).setOrigin(0.5)
               restartButton.setInteractive({ useHandCursor: true })
               restartButton.on("pointerover", () => restartButton.setStyle({ color: "#d8ffe6" }))
               restartButton.on("pointerout", () => restartButton.setStyle({ color: "#7fffa0" }))
               restartButton.on("pointerdown", () => { this.scene.start("game", { mode }) })
-              const menuButton = this.add.text(450, 545, "Menu", { fontSize: "26px", color: "#aee3ff", backgroundColor: "#1e2a33", padding: { x: 16, y: 8 } }).setOrigin(0.5)
+              const menuButton = this.menuButton = this.add.text(450, 545, "Menu", { fontSize: "26px", color: "#aee3ff", backgroundColor: "#1e2a33", padding: { x: 16, y: 8 } }).setOrigin(0.5)
               menuButton.setInteractive({ useHandCursor: true })
               menuButton.on("pointerdown", () => { this.scene.start("menu") })
+              this.scale.on("resize", () => this.layoutGameOverResponsive())
+              this.layoutGameOverResponsive()
+      }
+      layoutGameOverResponsive() {
+              const width = this.scale.width
+              const height = this.scale.height
+              const cx = width / 2
+              const compactPortrait = isPortraitMobileLayout()
+              if (compactPortrait) {
+                        const maxTextWidth = Math.max(280, width - 36)
+                        this.titleText.setStyle({ fontSize: "44px" }).setPosition(cx, height * 0.16)
+                        this.resultText.setStyle({ fontSize: "20px", lineSpacing: 8 }).setPosition(cx, height * 0.41).setWordWrapWidth(maxTextWidth)
+                        this.restartButton.setStyle({ fontSize: "30px", padding: { x: 18, y: 8 } }).setPosition(cx, height * 0.74)
+                        this.menuButton.setStyle({ fontSize: "22px", padding: { x: 14, y: 7 } }).setPosition(cx, height * 0.86)
+                        return
+              }
+              this.titleText.setStyle({ fontSize: "64px" }).setPosition(cx, 150)
+              this.resultText.setStyle({ fontSize: "26px", lineSpacing: 10 }).setPosition(cx, 280).setWordWrapWidth(0)
+              this.restartButton.setStyle({ fontSize: "36px", padding: { x: 20, y: 10 } }).setPosition(cx, 470)
+              this.menuButton.setStyle({ fontSize: "26px", padding: { x: 16, y: 8 } }).setPosition(cx, 545)
       }
 }
 
