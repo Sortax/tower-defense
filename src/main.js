@@ -420,18 +420,7 @@ class GameScene extends Phaser.Scene {
               this.setUpgradeButtonEnabled(false, `Need $${upgradeCost}`)
       }
       applyTowerLevelVisual(tower) {
-              if (tower.mode === "wall") { tower.setSize(40, 40); tower.setDisplaySize(40, 40); tower.setFillStyle(tower.baseColor, 1); return }
-              const scale = 1 + (tower.level - 1) * 0.1
-              tower.setSize(26 * scale, 26 * scale)
-              tower.setDisplaySize(26 * scale, 26 * scale)
-              const baseColor = Phaser.Display.Color.IntegerToColor(tower.baseColor)
-              const brighten = (tower.level - 1) * 20
-              const tint = Phaser.Display.Color.GetColor(
-                        Phaser.Math.Clamp(baseColor.red + brighten, 0, 255),
-                        Phaser.Math.Clamp(baseColor.green + brighten, 0, 255),
-                        Phaser.Math.Clamp(baseColor.blue + brighten, 0, 255)
-                      )
-              tower.setFillStyle(tint, 1)
+              if (tower.redrawVisual) tower.redrawVisual(tower.level)
       }
       getTowerUpgradeCost(tower) {
               const baseCost = tower.baseCost * tower.level
@@ -539,11 +528,11 @@ class GameScene extends Phaser.Scene {
                                     const isEntry = x === this.entry.x && y === this.entry.y
                                     const isExit = x === this.exit.x && y === this.exit.y
                                     const isInitialPath = this.pathSet.has(key)
-                                    let color = 0x182028
-                                    if (isInitialPath) color = 0x2e3842
-                                    if (isEntry) color = 0x1d7f57
-                                    if (isExit) color = 0x8f3434
-                                    g.lineStyle(1, 0x31414f)
+                                    let color = 0x0f1524
+                                    if (isInitialPath) color = 0x1d2940
+                                    if (isEntry) color = 0x123c4c
+                                    if (isExit) color = 0x41203a
+                                    g.lineStyle(1, 0x263857, 0.95)
                                     g.fillStyle(color)
                                     g.fillRect(wx, wy, this.tileSize, this.tileSize)
                                     g.strokeRect(wx, wy, this.tileSize, this.tileSize)
@@ -558,6 +547,54 @@ class GameScene extends Phaser.Scene {
       }
       tileCenter(tx, ty) { return { x: this.originX + tx * this.tileSize + this.tileSize / 2, y: this.originY + ty * this.tileSize + this.tileSize / 2 } }
 
+
+      createTowerVisual(mode, level = 1) {
+              const c = this.add.container(0, 0)
+              const g = this.add.graphics()
+              const energy = this.add.circle(0, 0, 4, 0x7de2ff, 0.9)
+              c.add([g, energy])
+              const draw = (lvl = 1) => {
+                        g.clear()
+                        const boost = 0.08 * (lvl - 1)
+                        g.lineStyle(2, 0x7bd5ff, 0.6)
+                        g.fillStyle(0x1a2638, 0.95)
+                        g.fillCircle(0, 0, 16)
+                        if (mode === "single") { g.fillStyle(0x2f6284, 1); g.fillRect(-4, -12, 8, 16); g.fillRect(2, -16, 10, 4) }
+                        if (mode === "slow") { g.strokeCircle(0, 0, 12); g.fillStyle(0x74e9ff, 0.6); g.fillCircle(0, 0, 8) }
+                        if (mode === "aoe") { g.fillStyle(0x5a4a34, 1); g.fillRoundedRect(-12, -10, 24, 20, 4); g.fillStyle(0xffa34d, 0.9); g.fillCircle(0, 0, 6) }
+                        if (mode === "projectile_aoe") { g.fillStyle(0x3d4f72, 1); g.fillRect(-12, -10, 9, 20); g.fillRect(3, -10, 9, 20); g.fillStyle(0xffbe74, 0.8); g.fillRect(-12, -13, 24, 3) }
+                        if (mode === "wall") { g.fillStyle(0x3a3f4d, 1); g.fillRoundedRect(-19, -19, 38, 38, 3); g.lineStyle(2, 0x68d8ff, 0.7); g.strokeRect(-14, -14, 28, 28) }
+                        if (mode === "anti_armor") { g.fillStyle(0x7f8b9e, 1); g.fillRect(-2, -14, 4, 18); g.fillStyle(0xd4e7ff, 1); g.fillRect(-1, -18, 12, 3) }
+                        if (mode === "chain") { g.fillStyle(0x5f62b5, 0.9); g.fillTriangle(-10, 12, 0, -16, 10, 12); g.lineStyle(2, 0xb8b3ff, 0.9); g.strokeCircle(0, -2, 5) }
+                        if (mode === "dot") { g.fillStyle(0x6a1f28, 1); g.fillCircle(0, 0, 11); g.lineStyle(2, 0xff8c3d, 0.9); g.strokeCircle(0, 0, 8) }
+                        energy.setFillStyle(mode === "slow" ? 0x8ff3ff : mode === "dot" ? 0xff8d4f : mode === "chain" ? 0xb8adff : 0x7de2ff, 0.95)
+                        c.setScale(1 + boost)
+              }
+              draw(level)
+              c.redrawVisual = draw
+              return c
+      }
+      createEnemyVisual(enemyTypeKey, radius) {
+              const c = this.add.container(0, 0)
+              const g = this.add.graphics()
+              c.add(g)
+              const draw = (fill = 0xff00ff) => {
+                        g.clear()
+                        g.fillStyle(fill, 0.95)
+                        g.lineStyle(2, 0xe1eeff, 0.35)
+                        if (["fast", "runner", "flier"].includes(enemyTypeKey)) g.fillTriangle(-radius, radius, 0, -radius, radius, radius)
+                        else if (["tank", "brute", "armored"].includes(enemyTypeKey)) g.fillRoundedRect(-radius, -radius, radius * 2, radius * 2, 3)
+                        else if (enemyTypeKey === "shielded") { g.fillCircle(0, 0, radius - 2); g.lineStyle(2, 0x8dd3ff, 0.9); g.strokeCircle(0, 0, radius + 3) }
+                        else if (enemyTypeKey === "splitter") { g.fillCircle(0, 0, radius - 1); g.lineStyle(2, 0xff9ca8, 0.9); g.strokeLineShape(new Phaser.Geom.Line(-radius + 2, -radius + 2, radius - 2, radius - 2)) }
+                        else if (enemyTypeKey === "boss") { g.fillCircle(0, 0, radius); g.fillStyle(0x2d142f, 0.95); g.fillCircle(0, 0, radius * 0.5); g.strokeCircle(0, 0, radius + 4) }
+                        else g.fillCircle(0, 0, radius)
+                        g.strokeCircle(0, 0, radius)
+                        if (enemyTypeKey === "regenerator") { g.fillStyle(0x5dff96, 0.8); g.fillCircle(0, 0, 4) }
+              }
+              c.redrawEnemy = draw
+              return c
+      }
+
   spawnEnemy(enemyTypeKey, waveNumber = this.waveIndex + 1) {
           if (this.gameOver) return
           const enemyType = ENEMY_TYPES[enemyTypeKey]
@@ -567,7 +604,8 @@ class GameScene extends Phaser.Scene {
           const speedScale = 1 + 0.05 * waveOffset
           const rewardScale = 1 + 0.06 * waveOffset
           const pos = this.tileCenter(this.entry.x, this.entry.y)
-          const enemy = this.add.circle(pos.x, pos.y, enemyType.radius, enemyType.color)
+          const enemy = this.createEnemyVisual(enemyType.key, enemyType.radius)
+          enemy.setPosition(pos.x, pos.y)
           enemy.enemyType = enemyType.key
           enemy.baseColor = enemyType.color
           enemy.maxHp = enemyType.hp * hpScale
@@ -615,9 +653,9 @@ class GameScene extends Phaser.Scene {
       }
       updateEnemyColor(enemy) {
               if (!enemy.active || enemy.isDying) return
-              if (enemy.isFlashing) { enemy.setFillStyle(0xffffff, 1); return }
-              if (enemy.isSlowed) { enemy.setFillStyle(0x66aaff, 1); return }
-              enemy.setFillStyle(enemy.baseColor, 1)
+              if (enemy.isFlashing) { enemy.redrawEnemy(0xffffff); return }
+              if (enemy.isSlowed) { enemy.redrawEnemy(0x66aaff); return }
+              enemy.redrawEnemy(enemy.baseColor)
               this.updateEnemyHealthBar(enemy)
       }
       showHitFeedback(enemy, damage) {
@@ -625,7 +663,7 @@ class GameScene extends Phaser.Scene {
               enemy.isFlashing = true
               enemy.flashVersion += 1
               const v = enemy.flashVersion
-              enemy.setFillStyle(0xffffff, 1)
+              enemy.redrawEnemy(0xffffff)
               const t = this.add.text(enemy.x, enemy.y - 16, `-${Math.round(damage)}`, { fontSize: "14px", color: "#ffd7d7" })
               t.setOrigin(0.5).setDepth(18)
               this.tweens.add({ targets: t, y: enemy.y - 34, alpha: 0, duration: 320, ease: "Quad.easeOut", onComplete: () => t.destroy() })
@@ -763,9 +801,8 @@ class GameScene extends Phaser.Scene {
           const pos = this.tileCenter(tx, ty)
           const isWall = towerType.mode === "wall"
           const size = isWall ? 40 : 26
-          const tower = this.add.rectangle(pos.x, pos.y, size, size, towerType.color)
-          if (!isWall) tower.setStrokeStyle(2, 0xf5f8ff, 0.7)
-          else tower.setStrokeStyle(2, 0x555555, 0.9)
+          const tower = this.createTowerVisual(towerType.mode, 1)
+          tower.setPosition(pos.x, pos.y)
           tower.tx = tx
           tower.ty = ty
           tower.typeKey = towerType.key
