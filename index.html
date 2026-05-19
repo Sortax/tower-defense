@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>tower-defense</title>
   </head>
   <body>
@@ -10,7 +10,8 @@
       <div id="hud-left"></div>
       <div id="hud-right">
         <span id="hud-right-label"></span>
-        <button id="hud-menu-btn" type="button">Menu</button>
+        <button id="tower-panel-toggle-btn" class="hud-btn" type="button" aria-expanded="false" aria-controls="tower-panel">Tower</button>
+        <button id="hud-menu-btn" class="hud-btn" type="button">Menu</button>
       </div>
       <aside id="tower-panel" class="tower-panel tower-panel--hidden" aria-live="polite">
         <h2 class="tower-panel__title">Tower</h2>
