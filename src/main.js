@@ -48,7 +48,7 @@ class MenuScene extends Phaser.Scene {
               this.selectedModeKey = "normal"
               this.add.text(450, 90, "Tower Defense", { fontSize: "58px", color: "#ffffff" }).setOrigin(0.5)
               this.add.text(450, 190, "Instructions", { fontSize: "26px", color: "#ffee88" }).setOrigin(0.5)
-              this.add.text(450, 270, "1/2/3/4: Tower  |  5: Wall\nClick empty tile: Place\nClick tower: Upgrade / Sell\nEntry: top-left  |  Exit: bottom-right\nWalls reroute enemies (BFS)", { fontSize: "18px", color: "#ffffff", align: "center", lineSpacing: 6 }).setOrigin(0.5)
+              this.add.text(450, 270, "1-8: Select tower\nClick empty tile: Place\nClick tower: Upgrade / Sell\nEntry: top-left  |  Exit: bottom-right\nWalls reroute enemies (BFS)", { fontSize: "18px", color: "#ffffff", align: "center", lineSpacing: 6 }).setOrigin(0.5)
               const scores = getBestScores()
               this.add.text(450, 390, `Best - Easy: ${scores.easy} | Normal: ${scores.normal} | Endless: ${scores.endless}`, { fontSize: "18px", color: "#aee3ff" }).setOrigin(0.5)
               this.add.text(450, 430, "Select Mode", { fontSize: "24px", color: "#ffee88" }).setOrigin(0.5)
@@ -226,6 +226,9 @@ class GameScene extends Phaser.Scene {
           this.input.keyboard.on("keydown-THREE", () => this.selectTowerBySlot(2))
           this.input.keyboard.on("keydown-FOUR", () => this.selectTowerBySlot(3))
           this.input.keyboard.on("keydown-FIVE", () => this.selectTowerBySlot(4))
+          this.input.keyboard.on("keydown-SIX", () => this.selectTowerBySlot(5))
+          this.input.keyboard.on("keydown-SEVEN", () => this.selectTowerBySlot(6))
+          this.input.keyboard.on("keydown-EIGHT", () => this.selectTowerBySlot(7))
           this.input.on("pointermove", (p) => this.updateGhost(p))
           this.input.on("pointerdown", (p, currentlyOver) => {
                     if (this.gameOver) return
@@ -401,7 +404,7 @@ class GameScene extends Phaser.Scene {
               const towerType = TOWER_TYPES[tower.typeKey]
               const refundValue = Math.floor(tower.totalInvested * 0.7)
               if (tower.mode === "wall") {
-                        this.towerPanelInfoEl.textContent = `Type: ${towerType.name}\nBlocks ground enemies\nSell: ${refundValue}`
+                        this.towerPanelInfoEl.textContent = `Type: ${towerType.name}\nRole: ${towerType.role}\nDamage type: none\nTargets flying: no\nBlocks ground enemies\nSell: ${refundValue}`
                         this.setSellButtonEnabled(true, `Sell $${refundValue}`)
                         this.setUpgradeButtonEnabled(false, "-")
                         return
@@ -410,7 +413,7 @@ class GameScene extends Phaser.Scene {
               const damageLabel = tower.damage.toFixed(1).replace(".0", "")
               const rangeTiles = Math.round((tower.range / this.tileSize) * 10) / 10
               const nextCostLabel = upgradeCost ? `${upgradeCost}` : "MAX"
-              this.towerPanelInfoEl.textContent = `Type: ${towerType.name}\nLevel: ${tower.level}/${tower.maxLevel}\nDamage: ${damageLabel} (${tower.damageType})\nRange: ${rangeTiles.toFixed(1)} tiles\nTargets flying: ${tower.targetsFlying ? "yes" : "no"}\nUpgrade: ${nextCostLabel}\nSell: ${refundValue}`
+              this.towerPanelInfoEl.textContent = `Type: ${towerType.name}\nRole: ${towerType.role}\nDamage type: ${tower.damageType}\nTargets flying: ${tower.targetsFlying ? "yes" : "no"}\nNotes: ${towerType.notes}\nLevel: ${tower.level}/${tower.maxLevel}\nDamage: ${damageLabel}\nRange: ${rangeTiles.toFixed(1)} tiles\nUpgrade: ${nextCostLabel}\nSell: ${refundValue}`
               this.setSellButtonEnabled(true, `Sell $${refundValue}`)
               if (tower.level >= tower.maxLevel) { this.setUpgradeButtonEnabled(false, "MAX"); return }
               if (this.money >= upgradeCost) { this.setUpgradeButtonEnabled(true, `Upgrade $${upgradeCost}`); return }
@@ -582,6 +585,7 @@ class GameScene extends Phaser.Scene {
           enemy.magicResist = enemyType.magicResist ?? 0
           enemy.immuneToSlow = !!enemyType.immuneToSlow
           enemy.regenPerSecond = enemyType.regenPerSecond ?? 0
+          enemy.dot = null
           enemy.radius = enemyType.radius
           enemy.healthBar = this.add.graphics().setDepth(14)
           if (enemy.flying) {
@@ -670,6 +674,11 @@ class GameScene extends Phaser.Scene {
               const dist = Math.hypot(dx, dy)
               if (dist < 2) { enemy.pathIndex = next; return }
               if (enemy.regenPerSecond > 0 && enemy.hp > 0 && enemy.hp < enemy.maxHp) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.regenPerSecond * dt)
+              if (enemy.dot && time >= enemy.dot.nextTick && time <= enemy.dot.until) {
+                        this.applyDamage(enemy, enemy.dot.damage, enemy.dot.type)
+                        enemy.dot.nextTick += enemy.dot.tick
+              }
+              if (enemy.dot && time > enemy.dot.until) enemy.dot = null
               this.updateEnemyHealthBar(enemy)
               const isSlowed = time < enemy.slowUntil
               if (enemy.isSlowed !== isSlowed) { enemy.isSlowed = isSlowed; this.updateEnemyColor(enemy) }
@@ -708,6 +717,15 @@ class GameScene extends Phaser.Scene {
           tower.slowDuration = towerType.slowDuration ?? 0
           tower.projectileSpeed = towerType.projectileSpeed ?? 0
           tower.splashRadius = towerType.splashRadius ?? 0
+          tower.armorPierce = towerType.armorPierce ?? 0
+          tower.bonusVs = towerType.bonusVs ?? []
+          tower.bonusMultiplier = towerType.bonusMultiplier ?? 1
+          tower.chainCount = towerType.chainCount ?? 0
+          tower.chainRange = towerType.chainRange ?? 0
+          tower.chainFalloff = towerType.chainFalloff ?? 1
+          tower.dotDamage = towerType.dotDamage ?? 0
+          tower.dotDuration = towerType.dotDuration ?? 0
+          tower.dotTick = towerType.dotTick ?? 0
           tower.lastShot = 0
           this.applyTowerLevelVisual(tower)
           this.towers.push(tower)
@@ -737,6 +755,7 @@ class GameScene extends Phaser.Scene {
               if (!target) return
               tower.lastShot = time
               if (tower.mode === "projectile_aoe") { this.spawnMissileProjectile(tower, target); return }
+              if (tower.mode === "chain") { this.fireChainLightning(tower, target); return }
               const beam = this.add.line(0, 0, tower.x, tower.y, target.x, target.y, 0xffffaa)
               beam.setOrigin(0, 0)
               this.time.delayedCall(60, () => beam.destroy())
@@ -748,10 +767,11 @@ class GameScene extends Phaser.Scene {
                                     const d = Phaser.Math.Distance.Between(target.x, target.y, enemy.x, enemy.y)
                                     return d <= tower.splashRadius
                         })
-                        enemiesInSplash.forEach((enemy) => this.applyDamage(enemy, tower.damage, tower.damageType))
+                        enemiesInSplash.forEach((enemy) => this.applyDamage(enemy, tower.damage, tower.damageType, tower))
                         return
               }
-              this.applyDamage(target, tower.damage, tower.damageType)
+              this.applyDamage(target, tower.damage, tower.damageType, tower)
+              if (tower.mode === "dot" && target.active) this.applyDot(target, tower)
               if (tower.mode === "slow" && target.active && !target.immuneToSlow) {
                         target.slowFactor = Math.min(target.slowFactor || 1, tower.slowFactor)
                         target.slowUntil = Math.max(target.slowUntil || 0, time + tower.slowDuration)
@@ -778,6 +798,43 @@ class GameScene extends Phaser.Scene {
               projectile.damageType = tower.damageType
               projectile.targetsFlying = tower.targetsFlying
       }
+
+      fireChainLightning(tower, firstTarget) {
+              const jumps = []
+              const hitSet = new Set()
+              let current = firstTarget
+              let damage = tower.damage
+              for (let i = 0; i < tower.chainCount && current; i++) {
+                        jumps.push({ fromX: i === 0 ? tower.x : jumps[i - 1].toX, fromY: i === 0 ? tower.y : jumps[i - 1].toY, toX: current.x, toY: current.y })
+                        this.applyDamage(current, damage, tower.damageType, tower)
+                        hitSet.add(current)
+                        const next = this.enemies.getChildren()
+                                  .filter((enemy) => enemy.active && !enemy.isDying && !hitSet.has(enemy) && (tower.targetsFlying || !enemy.flying))
+                                  .map((enemy) => ({ enemy, d: Phaser.Math.Distance.Between(current.x, current.y, enemy.x, enemy.y) }))
+                                  .filter((item) => item.d <= tower.chainRange)
+                                  .sort((a, b) => a.d - b.d)[0]?.enemy
+                        current = next
+                        damage *= tower.chainFalloff
+              }
+              jumps.forEach((j) => {
+                        const beam = this.add.line(0, 0, j.fromX, j.fromY, j.toX, j.toY, 0xb7c4ff)
+                        beam.setLineWidth(2, 2)
+                        beam.setOrigin(0, 0).setDepth(13)
+                        this.time.delayedCall(70, () => beam.destroy())
+              })
+      }
+      applyDot(enemy, tower) {
+              if (!enemy.active || enemy.isDying) return
+              const now = this.time.now
+              enemy.dot = {
+                        damage: Math.max(enemy.dot?.damage ?? 0, tower.dotDamage),
+                        tick: tower.dotTick,
+                        type: tower.damageType,
+                        until: now + tower.dotDuration,
+                        nextTick: now + tower.dotTick
+              }
+      }
+
       updateProjectile(projectile, dt) {
               if (projectile.target?.active && !projectile.target.isDying) {
                         projectile.targetX = projectile.target.x
@@ -803,11 +860,16 @@ class GameScene extends Phaser.Scene {
               projectile.x += dx * ratio
               projectile.y += dy * ratio
       }
-      applyDamage(enemy, damage, damageType = "physical") {
+      applyDamage(enemy, damage, damageType = "physical", sourceTower = null) {
               if (!enemy.active || enemy.isDying) return
               let final = damage
               if (damageType === "magic" && enemy.magicResist) final = final * (1 - enemy.magicResist)
               if (damageType === "physical" && enemy.armor) final = Math.max(1, final - enemy.armor)
+              if (damageType === "anti_armor") {
+                        const pierce = sourceTower?.armorPierce ?? 0
+                        final = Math.max(1, final - Math.max(0, enemy.armor - pierce))
+                        if (sourceTower?.bonusVs?.includes(enemy.enemyType)) final *= sourceTower.bonusMultiplier ?? 1
+              }
               this.showHitFeedback(enemy, final)
               enemy.hp -= final
               if (enemy.hp > 0) return
@@ -828,7 +890,7 @@ class GameScene extends Phaser.Scene {
               const bossLabel = waveLabel % 5 === 0 ? " BOSS WAVE" : ""
               const enemiesRemaining = this.waveState === "wave" ? this.waveSpawnRemaining + this.activeEnemyCount() : 0
               if (this.hudLeftEl) this.hudLeftEl.textContent = `Mode: ${this.mode.label} | Money: ${this.money} | Lives: ${this.lives} | Wave: ${waveLabel}${bossLabel} (${waveStateLabel}) | Enemies: ${enemiesRemaining}`
-              const selectedTowerLabel = `Tower: ${selectedTower.name} ($${selectedTower.cost}) [1/2/3/4/5]`
+              const selectedTowerLabel = `Tower: ${selectedTower.name} ($${selectedTower.cost}) [1-8]`
               if (this.hudRightLabelEl) this.hudRightLabelEl.textContent = selectedTowerLabel
               else if (this.hudRightEl) this.hudRightEl.textContent = selectedTowerLabel
               if (this.selectedPlacedTower) this.updateTowerInfoPanel(this.selectedPlacedTower)
