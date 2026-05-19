@@ -346,8 +346,14 @@ class GameScene extends Phaser.Scene {
               this.time.removeAllEvents(); this.gameOver = true; this.scene.start("menu")
       }
       bindTowerPanelControls() {
-              if (this.towerUpgradeBtnEl) this.towerUpgradeBtnEl.addEventListener("click", (e) => { e.stopPropagation(); this.tryUpgradeSelectedTower() })
-              if (this.towerSellBtnEl) this.towerSellBtnEl.addEventListener("click", (e) => { e.stopPropagation(); this.trySellSelectedTower() })
+              this.onTowerUpgradeButtonClick = (event) => { event.stopPropagation(); this.tryUpgradeSelectedTower() }
+              this.onTowerSellButtonClick = (event) => { event.stopPropagation(); this.trySellSelectedTower() }
+              if (this.towerUpgradeBtnEl) this.towerUpgradeBtnEl.addEventListener("click", this.onTowerUpgradeButtonClick)
+              if (this.towerSellBtnEl) this.towerSellBtnEl.addEventListener("click", this.onTowerSellButtonClick)
+              this.events.once("shutdown", () => {
+                        this.towerUpgradeBtnEl?.removeEventListener("click", this.onTowerUpgradeButtonClick)
+                        this.towerSellBtnEl?.removeEventListener("click", this.onTowerSellButtonClick)
+              })
       }
       createRangeOverlay() { this.rangeGraphics = this.add.graphics(); this.rangeGraphics.setDepth(11) }
       createGhostOverlay() {
@@ -524,7 +530,7 @@ class GameScene extends Phaser.Scene {
               this.waveIndex += 1
               this.wavesCompleted += 1
               if (this.maxWaves && this.waveIndex >= this.maxWaves) { this.endGame(true); return }
-              this.waveState = "intermission"; this.startNextWave()
+              this.startWaveCountdown()
       }
       startWaveCountdown() {
               this.waveState = "countdown"
@@ -550,7 +556,8 @@ class GameScene extends Phaser.Scene {
               if (waveNumber % 5 === 0) {
                         return { id: waveNumber, bossWave: true, nextWaveDelay: 5000, spawns: [ { type: "boss", count: 1, interval: 0 }, { type: "grunt", count: 4, interval: 700, gapAfter: 400 }, { type: "fast", count: 6, interval: 250 } ] }
               }
-              const baseWave = WAVES[(waveNumber - 1) % WAVES.length]
+              const normalWaveNumber = waveNumber - Math.floor(waveNumber / 5)
+              const baseWave = WAVES[(normalWaveNumber - 1) % WAVES.length]
               return { id: waveNumber, bossWave: false, nextWaveDelay: baseWave.nextWaveDelay, spawns: baseWave.spawns }
       }
       drawGrid() {
