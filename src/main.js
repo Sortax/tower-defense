@@ -454,7 +454,7 @@ class GameScene extends Phaser.Scene {
               const tileKey = `${tower.tx},${tower.ty}`
               this.towers = this.towers.filter((t) => t !== tower)
               if (wasWall) { this.walls.delete(tileKey); this.wallsVersion += 1; this.recomputeAllEnemyPaths(); this.drawGrid() }
-              tower.destroy()
+              this.destroyTowerVisual(tower)
               this.money += refund
               this.clearSelectedTower()
               this.updateUI()
@@ -495,7 +495,11 @@ class GameScene extends Phaser.Scene {
       update(time, delta) {
               const dt = delta / 1000
               this.enemies.getChildren().forEach((enemy) => { if (enemy.active) this.moveEnemy(enemy, dt, time) })
-              this.towers.forEach((tower) => { if (tower.active && tower.mode !== "wall") this.towerLogic(tower, time) })
+              this.towers.forEach((tower) => {
+                        if (!tower.active) return
+                        this.updateTowerVisualState(tower, time)
+                        if (tower.mode !== "wall") this.towerLogic(tower, time)
+              })
               this.projectiles.getChildren().forEach((projectile) => { if (projectile.active) this.updateProjectile(projectile, dt) })
               const projectilesActive = this.projectiles.getChildren().some((p) => p.active)
               if (!this.gameOver && this.waveState === "wave" && this.pendingSpawns === 0 && this.activeEnemyCount() === 0 && !projectilesActive) {
@@ -548,31 +552,100 @@ class GameScene extends Phaser.Scene {
       tileCenter(tx, ty) { return { x: this.originX + tx * this.tileSize + this.tileSize / 2, y: this.originY + ty * this.tileSize + this.tileSize / 2 } }
 
 
-      createTowerVisual(mode, level = 1) {
-              const c = this.add.container(0, 0)
-              const g = this.add.graphics()
-              const energy = this.add.circle(0, 0, 4, 0x7de2ff, 0.9)
-              c.add([g, energy])
-              const draw = (lvl = 1) => {
-                        g.clear()
-                        const boost = 0.08 * (lvl - 1)
-                        g.lineStyle(2, 0x7bd5ff, 0.6)
-                        g.fillStyle(0x1a2638, 0.95)
-                        g.fillCircle(0, 0, 16)
-                        if (mode === "single") { g.fillStyle(0x2f6284, 1); g.fillRect(-4, -12, 8, 16); g.fillRect(2, -16, 10, 4) }
-                        if (mode === "slow") { g.strokeCircle(0, 0, 12); g.fillStyle(0x74e9ff, 0.6); g.fillCircle(0, 0, 8) }
-                        if (mode === "aoe") { g.fillStyle(0x5a4a34, 1); g.fillRoundedRect(-12, -10, 24, 20, 4); g.fillStyle(0xffa34d, 0.9); g.fillCircle(0, 0, 6) }
-                        if (mode === "projectile_aoe") { g.fillStyle(0x3d4f72, 1); g.fillRect(-12, -10, 9, 20); g.fillRect(3, -10, 9, 20); g.fillStyle(0xffbe74, 0.8); g.fillRect(-12, -13, 24, 3) }
-                        if (mode === "wall") { g.fillStyle(0x3a3f4d, 1); g.fillRoundedRect(-19, -19, 38, 38, 3); g.lineStyle(2, 0x68d8ff, 0.7); g.strokeRect(-14, -14, 28, 28) }
-                        if (mode === "anti_armor") { g.fillStyle(0x7f8b9e, 1); g.fillRect(-2, -14, 4, 18); g.fillStyle(0xd4e7ff, 1); g.fillRect(-1, -18, 12, 3) }
-                        if (mode === "chain") { g.fillStyle(0x5f62b5, 0.9); g.fillTriangle(-10, 12, 0, -16, 10, 12); g.lineStyle(2, 0xb8b3ff, 0.9); g.strokeCircle(0, -2, 5) }
-                        if (mode === "dot") { g.fillStyle(0x6a1f28, 1); g.fillCircle(0, 0, 11); g.lineStyle(2, 0xff8c3d, 0.9); g.strokeCircle(0, 0, 8) }
-                        energy.setFillStyle(mode === "slow" ? 0x8ff3ff : mode === "dot" ? 0xff8d4f : mode === "chain" ? 0xb8adff : 0x7de2ff, 0.95)
-                        c.setScale(1 + boost)
+      createTowerVisual(tower) {
+              const c = this.add.container(0, 0).setDepth(10)
+              const base = this.add.graphics()
+              const body = this.add.graphics()
+              const turret = this.add.container(0, 0)
+              const turretG = this.add.graphics()
+              const glow = this.add.graphics()
+              turret.add(turretG)
+              c.add([glow, base, body, turret])
+              const style = {
+                        single: { accent: 0x66d7ff, core: 0x95e7ff, metal: 0x263549 },
+                        slow: { accent: 0x78eeff, core: 0x9cffff, metal: 0x1f3042 },
+                        aoe: { accent: 0xffa64d, core: 0xffd08e, metal: 0x3e3230 },
+                        projectile_aoe: { accent: 0xff8f4d, core: 0xffc476, metal: 0x324055 },
+                        wall: { accent: 0x71d5ff, core: 0xb7edff, metal: 0x3a4355 },
+                        anti_armor: { accent: 0xe5f1ff, core: 0xffffff, metal: 0x4b5666 },
+                        chain: { accent: 0x9f86ff, core: 0xd7caff, metal: 0x2f2d60 },
+                        dot: { accent: 0xff5a2d, core: 0xffa15d, metal: 0x4f242b }
+              }[tower.mode]
+              const draw = (level = 1) => {
+                        const lvl = 1 + (level - 1) * 0.08
+                        base.clear(); body.clear(); turretG.clear(); glow.clear()
+                        base.fillStyle(0x131c2b, 0.98); base.fillRoundedRect(-16, 9, 32, 9, 3)
+                        base.fillStyle(style.metal, 1); base.fillRoundedRect(-14, -12, 28, 24, 5)
+                        base.lineStyle(2, 0x9ad6ff, 0.25); base.strokeRoundedRect(-14, -12, 28, 24, 5)
+                        if (tower.mode === "wall") {
+                                body.fillStyle(0x33435b, 1); body.fillRoundedRect(-17, -17, 34, 34, 4)
+                                body.lineStyle(2, style.accent, 0.8); body.strokeRoundedRect(-12, -12, 24, 24, 3)
+                                body.fillStyle(style.core, 0.35); body.fillRect(-2, -14, 4, 28)
+                                body.fillRect(-14, -2, 28, 4)
+                                glow.fillStyle(style.accent, 0.15); glow.fillRoundedRect(-20, -20, 40, 40, 6)
+                        } else {
+                                body.fillStyle(style.metal, 0.9); body.fillRoundedRect(-10, -8, 20, 16, 4)
+                                glow.fillStyle(style.accent, 0.15); glow.fillCircle(0, 0, 16)
+                        }
+                        if (tower.mode === "single") {
+                                turretG.fillStyle(0x385473, 1); turretG.fillRoundedRect(-6, -5, 12, 10, 3)
+                                turretG.fillStyle(0x4a6f94, 1); turretG.fillRoundedRect(2, -2, 14, 4, 2)
+                                turretG.fillStyle(style.core, 0.9); turretG.fillCircle(-2, 0, 3)
+                        }
+                        if (tower.mode === "slow") {
+                                turretG.lineStyle(3, style.accent, 0.95); turretG.strokeCircle(0, 0, 8)
+                                turretG.fillStyle(style.core, 0.85); turretG.fillCircle(0, 0, 4)
+                                turretG.lineStyle(2, style.accent, 0.6); turretG.strokeEllipse(0, 0, 24, 12)
+                        }
+                        if (tower.mode === "aoe") {
+                                turretG.fillStyle(0x5b4032, 1); turretG.fillRoundedRect(-9, -6, 18, 12, 3)
+                                turretG.fillStyle(0x714f3b, 1); turretG.fillRoundedRect(0, -4, 14, 8, 2)
+                                turretG.fillStyle(style.accent, 0.95); turretG.fillCircle(-2, 0, 4.5)
+                        }
+                        if (tower.mode === "projectile_aoe") {
+                                turretG.fillStyle(0x4b5d78, 1); turretG.fillRoundedRect(-11, -8, 20, 7, 2)
+                                turretG.fillRoundedRect(-11, 1, 20, 7, 2)
+                                turretG.fillStyle(style.core, 0.85); turretG.fillRect(9, -7, 5, 5); turretG.fillRect(9, 2, 5, 5)
+                        }
+                        if (tower.mode === "anti_armor") {
+                                turretG.fillStyle(0x6c7481, 1); turretG.fillRoundedRect(-5, -4, 11, 8, 2)
+                                turretG.fillStyle(0xd7e5f7, 1); turretG.fillRoundedRect(2, -2, 20, 4, 1)
+                                turretG.fillStyle(style.core, 0.95); turretG.fillRect(16, -1, 6, 2)
+                        }
+                        if (tower.mode === "chain") {
+                                turretG.fillStyle(0x4a3f8e, 0.95); turretG.fillRect(-3, -12, 6, 24)
+                                turretG.fillStyle(style.core, 0.9); turretG.fillCircle(0, 0, 4)
+                                turretG.lineStyle(2, style.accent, 0.95); turretG.strokeLineShape(new Phaser.Geom.Line(-7, -8, 7, -8)); turretG.strokeLineShape(new Phaser.Geom.Line(-7, 8, 7, 8))
+                        }
+                        if (tower.mode === "dot") {
+                                turretG.fillStyle(0x6c3037, 1); turretG.fillRoundedRect(-8, -5, 13, 10, 3)
+                                turretG.fillStyle(0x914038, 1); turretG.fillCircle(-8, 0, 4.5)
+                                turretG.fillStyle(style.accent, 0.95); turretG.fillRoundedRect(2, -2, 14, 4, 2)
+                                turretG.fillStyle(style.core, 0.85); turretG.fillCircle(-8, 0, 2.6)
+                        }
+                        c.setScale(lvl)
               }
-              draw(level)
+              c.visualStyle = style
+              c.visualParts = { turret, glow }
               c.redrawVisual = draw
+              draw(tower.level ?? 1)
               return c
+      }
+
+      updateTowerOrientation(tower, target = null) {
+              if (!tower?.visualParts?.turret || tower.mode === "wall" || tower.mode === "slow" || tower.mode === "chain") return
+              if (!target) return
+              const angle = Phaser.Math.Angle.Between(tower.x, tower.y, target.x, target.y)
+              tower.visualParts.turret.rotation = angle
+      }
+      updateTowerVisualState(tower, time) {
+              if (!tower?.visualParts?.glow) return
+              const pulse = 0.18 + 0.08 * Math.sin(time * 0.008 + tower.tx * 0.3 + tower.ty * 0.5)
+              tower.visualParts.glow.setAlpha(pulse)
+      }
+      destroyTowerVisual(tower) {
+              if (!tower) return
+              tower.destroy()
       }
       createEnemyVisual(enemyTypeKey, radius) {
               const c = this.add.container(0, 0).setDepth(12).setVisible(true).setAlpha(1)
@@ -883,8 +956,7 @@ class GameScene extends Phaser.Scene {
   placeTower(tx, ty, towerType) {
           const pos = this.tileCenter(tx, ty)
           const isWall = towerType.mode === "wall"
-          const size = isWall ? 40 : 26
-          const tower = this.createTowerVisual(towerType.mode, 1)
+          const tower = this.createTowerVisual({ mode: towerType.mode, level: 1 })
           tower.setPosition(pos.x, pos.y)
           tower.tx = tx
           tower.ty = ty
@@ -945,6 +1017,7 @@ class GameScene extends Phaser.Scene {
               const enemies = this.enemies.getChildren()
               const target = this.pickTarget(tower, enemies)
               if (!target) return
+              this.updateTowerOrientation(tower, target)
               tower.lastShot = time
               if (tower.mode === "projectile_aoe") { this.spawnMissileProjectile(tower, target); return }
               if (tower.mode === "chain") { this.fireChainLightning(tower, target); return }
